@@ -51,7 +51,7 @@ Pergunte-se:
 - Isso afeta um fluxo? → atualizar o arquivo em `docs/flows/`
 - Isso é uma decisão arquitetural nova? → adicionar ADR em `docs/architecture/decisions.md`
 - Isso afeta o roadmap? → atualizar o epic correspondente
-- Isso muda como um agente deve agir? → atualizar `.claude/agents/{agente}.md`
+- Isso muda como um agente deve agir? → consultar `.claude/prompt-engineering.md` para verificar se alguma técnica deve ser adicionada/ajustada, depois atualizar `.claude/agents/{agente}.md`
 
 ---
 
@@ -166,6 +166,12 @@ O agente QA usa **Playwright via MCP** para executar testes E2E no browser real:
 | `epic-9-events.md`          | Módulo NestJS do agente WhatsApp                                 |
 | `epic-10-patient-portal.md` | Portal do paciente                                               |
 | `epic-11-deploy.md`         | Polish, Swagger, seed, deploy Hetzner                            |
+
+### `.claude/`
+
+| Arquivo                  | Conteúdo                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| `prompt-engineering.md`  | Guia de quando aplicar cada técnica de PE nos agentes — **ler antes de editar qualquer agente** |
 
 ### `.claude/agents/`
 
