@@ -116,6 +116,31 @@ When reviewing code, check:
 - [ ] Events emitted when state changes (for agent reactions)?
 - [ ] event_log entry created for audit-worthy actions?
 
+## Decisão de Revisão
+
+Após percorrer o checklist acima, toda revisão deve terminar com **exatamente um** dos três vereditos abaixo.
+
+### ✅ APROVADO
+Todos os itens do checklist passaram. Nenhuma correção necessária.
+> A User Story pode avançar para o próximo agente (QA ou próxima US).
+
+### ⚠️ APROVADO COM OBSERVAÇÕES
+Nenhum item bloqueante, mas há pontos de atenção (code smell, nomes confusos, oportunidade de melhoria não-crítica).
+> A User Story **pode avançar**, mas as observações devem ser registradas. Formato:
+> ```
+> OBS-TL-N: [descrição] — não bloqueia, mas endereçar antes do deploy
+> ```
+
+### 🚫 REPROVADO — BLOQUEANTE
+Um ou mais itens do checklist falharam de forma que compromete segurança, isolamento de tenant, corretude de negócio ou integridade do sistema.
+> A User Story **não avança**. O problema deve ser corrigido e a revisão refeita. Formato:
+> ```
+> BLOQUEANTE-N: [descrição do problema]
+> CORREÇÃO ESPERADA: [o que precisa mudar]
+> ```
+
+**Critério de distinção**: se o bug pode vazar dados entre tenants, permitir acesso não autorizado, ou quebrar o sistema em produção → é BLOQUEANTE. Se é estético, de performance futura, ou de legibilidade → é OBSERVAÇÃO.
+
 ## Common Integration Patterns
 
 ### Creating a feature (full stack)
