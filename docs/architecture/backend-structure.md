@@ -156,7 +156,7 @@ apps/api/src/
 
 | Module | Purpose |
 |--------|---------|
-| `config/` | Environment variable validation using Zod schemas. Validates DB_*, JWT_SECRET, RESEND_API_KEY, WEBHOOK_API_KEY at startup. |
+| `config/` | Environment variable validation using Zod schemas. Validates DB_*, JWT_SECRET, RESEND_API_KEY, EVOLUTION_WEBHOOK_TOKEN at startup. |
 | `database/` | Knex provider with connection pooling. Exposes a global `KnexModule` that all feature modules can inject. Migrations are raw SQL for full control. |
 | `common/` | Shared decorators, guards, filters, interceptors, and pipes used across all modules. |
 | `email/` | Resend email client with HTML templates for invite and password reset flows. |

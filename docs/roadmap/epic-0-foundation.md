@@ -10,15 +10,17 @@
 
 ---
 
-## US-0.1: Como desenvolvedor, quero o monorepo configurado para comecar a codar
+## US-0.1: Como desenvolvedor, quero o monorepo configurado para comecar a codar ✅
 
-- [ ] Criar pasta `nocrato-health-v2/`, `git init`
-- [ ] package.json raiz (pnpm workspaces: `apps/*`)
-- [ ] turbo.json (build, dev, lint, typecheck)
-- [ ] tsconfig.base.json
-- [ ] .gitignore, .nvmrc (Node 20), .env.example
-- [ ] docker/docker-compose.dev.yml (PostgreSQL 16)
-- [ ] `docker compose up -d` → banco rodando
+- [x] Criar pasta `nocrato-health-v2/`, `git init`
+- [x] package.json raiz (pnpm workspaces: `apps/*`, `packages/*`) + pnpm-workspace.yaml
+- [x] turbo.json (build, dev, lint, typecheck, test, test:e2e)
+- [x] tsconfig.base.json (strict, decorators, moduleResolution: node10)
+- [x] .gitignore, .nvmrc (Node 20), .env.example
+- [x] docker/docker-compose.dev.yml (PostgreSQL 16, named network, healthcheck)
+- [x] docker/CLAUDE.md (documentação do módulo)
+- [x] `docker compose up -d` → banco rodando (PostgreSQL 16.11, healthy)
+- [x] Tech-lead aprovado (após correções: EVOLUTION_WEBHOOK_TOKEN, moduleResolution, network)
 
 ---
 
@@ -26,7 +28,7 @@
 
 - [ ] Scaffold apps/api (NestJS + TypeScript)
 - [ ] package.json com deps (@nestjs/core, knex, pg, zod, etc.)
-- [ ] config/env.ts (Zod validation: DB_*, JWT_SECRET, RESEND_API_KEY, WEBHOOK_API_KEY)
+- [ ] config/env.ts (Zod validation: DB_*, JWT_SECRET, RESEND_API_KEY, EVOLUTION_WEBHOOK_TOKEN)
 - [ ] database/knex.provider.ts + database.module.ts (Global)
 - [ ] 12 migration files (SQL puro, ordem de FK)
 - [ ] Rodar migrations, verificar todas as tabelas no banco
