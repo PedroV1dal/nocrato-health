@@ -24,17 +24,20 @@
 
 ---
 
-## US-0.2: Como desenvolvedor, quero o NestJS bootstrapado com banco conectado
+## US-0.2: Como desenvolvedor, quero o NestJS bootstrapado com banco conectado ✅
 
-- [ ] Scaffold apps/api (NestJS + TypeScript)
-- [ ] package.json com deps (@nestjs/core, knex, pg, zod, etc.)
-- [ ] config/env.ts (Zod validation: DB_*, JWT_SECRET, RESEND_API_KEY, EVOLUTION_WEBHOOK_TOKEN)
-- [ ] database/knex.provider.ts + database.module.ts (Global)
-- [ ] 12 migration files (SQL puro, ordem de FK)
-- [ ] Rodar migrations, verificar todas as tabelas no banco
-- [ ] Seed: 1 agency_admin (email: admin@nocrato.com, senha: admin123)
-- [ ] Health check: GET /health → { status: 'ok' }
-- [ ] **Criterio:** `pnpm --filter @nocrato/api dev` → NestJS sobe na 3000
+- [x] Scaffold apps/api (NestJS 11 + TypeScript)
+- [x] package.json com deps (@nestjs/core, @nestjs/common, knex, pg, zod, bcrypt, dotenv, etc.)
+- [x] config/env.ts (Zod validation: DB_*, JWT_*, RESEND_API_KEY, EVOLUTION_*, OPENAI_API_KEY)
+- [x] database/knex.provider.ts (Symbol KNEX + useFactory) + database.module.ts (@Global)
+- [x] database/knexfile.ts, migrate.ts, seed.ts
+- [x] 14 migration files TypeScript com knex.raw() (001 a 014, ordem de FK)
+- [x] Rodar migrations: 14 aplicadas em batch 1, 12 tabelas de negócio criadas
+- [x] Seed: admin@nocrato.com criado com senha admin123 (bcrypt round 10)
+- [x] Health check: GET /health → { status: 'ok', timestamp }
+- [x] CLAUDE.md criados: apps/api/, src/config/, src/database/
+- [x] **Criterio:** NestJS sobe na 3000, `curl /health` → 200 OK
+- [x] DBA + Tech-lead APROVADOS (3 observações não-bloqueantes logadas para epics futuros)
 
 ---
 
