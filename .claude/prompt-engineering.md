@@ -112,6 +112,84 @@ Ao encontrar uma falha:
 
 ---
 
+---
+
+## Estratégia do Claude Principal — Custo, Contexto e Delegação
+
+Esta seção é para o **Claude principal** (não os subagentes). Define quando e como invocar subagentes para manter o contexto principal enxuto e reduzir custo total da sessão.
+
+---
+
+### Quando delegar para subagente vs. resolver inline
+
+| Situação | Decisão | Motivo |
+|---|---|---|
+| Revisão de código (tech-lead, dba) | **Subagente** | Lê múltiplos arquivos, produz relatório longo — polui contexto principal |
+| Exploração ampla de codebase | **Subagente** | Múltiplas buscas com resultados grandes — main context não precisa ver tudo |
+| Escrita de um único arquivo simples | **Inline** | Não vale overhead de subagente |
+| Escrita de módulo completo (5+ arquivos) | **Subagente** | Isola o trabalho, mantém contexto principal limpo |
+| Pergunta técnica pontual | **Inline** | Resposta curta, sem side effects |
+| Testes + validação de critérios de aceite | **Subagente** | QA precisa de contexto próprio e ferramentas isoladas |
+
+**Regra geral**: se a tarefa vai gerar mais de ~500 tokens de output ou exige ler mais de 3 arquivos, use subagente.
+
+---
+
+### Como escrever prompts eficientes para subagentes (Task tool)
+
+O prompt passado ao subagente via Task tool **deve ser autossuficiente** — o subagente não tem acesso ao histórico da conversa principal.
+
+**Estrutura recomendada:**
+
+```
+1. PAPEL: "Você é o [agente X] do projeto Nocrato Health V2"
+2. CONTEXTO: o que já foi feito, qual US está sendo trabalhada
+3. TAREFA: o que precisa ser feito agora (específico, bounded)
+4. ARQUIVOS RELEVANTES: quais arquivos ler primeiro
+5. OUTPUT ESPERADO: formato exato do que deve ser retornado
+```
+
+**Exemplo:**
+```
+Você é o tech-lead do projeto. A US-1.2 (login de doutor) acabou de ser implementada.
+Revise os arquivos:
+- apps/api/src/modules/auth/auth.controller.ts
+- apps/api/src/modules/auth/auth.service.ts
+- apps/api/src/common/guards/jwt-auth.guard.ts
+
+Retorne exatamente:
+- O veredito (APROVADO / APROVADO COM OBSERVAÇÕES / REPROVADO — BLOQUEANTE)
+- Lista de issues com código BLOQUEANTE-N ou OBS-TL-N
+- Nada mais
+```
+
+Quanto mais específico o output esperado, menos tokens o subagente gasta em explicações desnecessárias.
+
+---
+
+### Técnicas de PE para aplicar nos prompts de subagente
+
+| Técnica | Quando aplicar no prompt do Task |
+|---|---|
+| **SoT (Skeleton of Thought)** | Sempre que quiser output estruturado — liste os campos esperados no prompt. Reduz tokens e facilita parse do resultado |
+| **Constraint** | Quando há restrições que o subagente pode ignorar por falta de contexto ("não altere arquivos existentes", "retorne apenas o diff necessário") |
+| **Few-Shot inline** | Quando o output é um formato novo que o agente não conhece — cole um exemplo curto diretamente no prompt do Task |
+| **CoT explícito** | Quando o subagente precisa raciocinar (revisão, decisão) — adicione "analise cada item antes de emitir o veredito" |
+
+---
+
+### Isolamento de contexto — regras
+
+1. **Cada subagente começa com contexto zero** — tudo que ele precisa saber deve estar no prompt do Task
+2. **O resultado retornado é o único que entra no contexto principal** — o subagente pode ler 20 arquivos; o main context só vê o que ele devolveu
+3. **Nunca passe o histórico completo da conversa para um subagente** — extraia apenas o que é relevante para aquela tarefa
+4. **Subagentes de revisão devem retornar apenas o veredito + issues** — não o código revisado, não explicações longas
+5. **Subagentes de implementação devem retornar apenas: "feito, arquivos criados: X, Y, Z"** — o main context lê os arquivos depois se precisar
+
+---
+
 ## Princípio geral
 
 > Adicionar técnicas de prompt tem custo: prompts maiores são mais lentos, mais caros, e podem introduzir instruções conflitantes. Só adicione uma técnica quando houver um problema observado que ela resolve. Não optimize prematuramente agentes que já funcionam.
+
+> Para o Claude principal: o contexto é o recurso mais escasso. Delegate cedo, receba resultados compactos, siga em frente.

@@ -109,6 +109,20 @@ apps/web/src/components/CLAUDE.md
 
 O `CLAUDE.md` de módulo é a primeira coisa que qualquer agente deve ler antes de tocar naquele módulo.
 
+### Protocolo de subagentes (Task tool)
+
+Subagentes são invocados via **Task tool** — cada chamada cria um contexto isolado que é destruído ao término da tarefa. O contexto principal recebe apenas o resultado.
+
+**Regras:**
+
+1. **Sempre use Task tool** — nunca invoque um agente inline tentando simular seu comportamento no contexto principal
+2. **O prompt deve ser autossuficiente** — inclua papel, contexto da US, arquivos relevantes e formato de output esperado. O subagente não tem acesso ao histórico desta conversa
+3. **Peça output compacto** — revisões retornam veredito + issues; implementações retornam lista de arquivos criados. Nada além disso entra no contexto principal
+4. **Quando delegar**: tarefas que leem 3+ arquivos, geram 500+ tokens de output, ou têm escopo isolado (revisão, testes, exploração de codebase)
+5. **Quando não delegar**: edições pontuais em 1-2 arquivos, respostas curtas, tarefas que dependem do estado atual da conversa
+
+Consulte `.claude/prompt-engineering.md` para a estratégia completa de delegação e técnicas de PE para prompts de Task.
+
 ### Testes E2E com Playwright (frontend)
 
 O agente QA usa **Playwright via MCP** para executar testes E2E no browser real:
