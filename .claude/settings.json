@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --filter api test -- --testPathPattern=\"agency-auth.service|doctor-auth.service\" --no-coverage)",
+      "Bash(pnpm --filter @nocrato/web typecheck)",
+      "Bash(git -C /home/vidales/nocrato-health-v2 status)",
+      "Bash(git -C /home/vidales/nocrato-health-v2 log --oneline -5)",
+      "Bash(git add CLAUDE.md .claude/settings.json .claude/skills/)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

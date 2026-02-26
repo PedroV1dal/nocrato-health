@@ -18,6 +18,19 @@ Este arquivo é lido automaticamente pelo Claude Code no início de cada sessão
 
 ---
 
+## Skills autônomas — Gatilhos obrigatórios
+
+O Claude DEVE invocar as skills abaixo (via Skill tool) automaticamente quando as condições forem atendidas — sem esperar instrução explícita do usuário.
+
+| Skill | Comando | Ativar quando |
+|---|---|---|
+| Resumo de Continuação | `/compact` | Contexto acima de 60-70% **ou** uma US acabou de ser concluída **ou** antes de iniciar uma US nova e complexa |
+| Definition of Done | `/definition-of-done` | Ao final de qualquer User Story, antes de propor o commit |
+
+**Regra:** se a condição for atendida e a skill não tiver sido invocada, o Claude está em violação do protocolo.
+
+---
+
 ## PROTOCOLO OBRIGATÓRIO — Leia antes de qualquer ação
 
 ### Regra principal: Docs First
