@@ -87,27 +87,86 @@ Key tables: `tenants`, `users`, `patients`, `appointments`, `clinical_notes`, `d
 5. **Simplicity Guard**: Push back on over-engineering; prefer boring, proven solutions
 6. **Documentation**: Keep `docs/architecture/` accurate and up-to-date
 
-## ADR Format
+## Antes de Qualquer Decisão
+
+1. **Leia `docs/architecture/`** — consulte `decisions.md`, `tech-stack.md` e `backend-structure.md` para garantir consistência com ADRs existentes. Nunca contradiga um ADR sem propor explicitamente sua revisão.
+2. **Valide o contexto MVP**: esta decisão faz sentido para solo dev, Hetzner CX22, mercado brasileiro de saúde?
+3. **Identifique os NFRs relevantes** (ver seção abaixo) — liste apenas os que impactam a decisão atual.
+
+## NFRs Padrão deste Projeto
+
+Ponto de partida ao analisar qualquer nova feature ou componente. Mencione apenas os NFRs que impactam a decisão — ignore os irrelevantes.
+
+- **Performance**: sem SLA formal; aceitável para uso em consultório (< 2s nas rotas críticas)
+- **Escalabilidade**: vertical-first (Hetzner CX22); sem projeção horizontal no MVP
+- **Disponibilidade**: best-effort; sem redundância ou failover no MVP
+- **Segurança / LGPD**: dados de saúde; tenant isolation obrigatório em toda query tenant-scoped
+- **Manutenibilidade**: código legível > performance prematura; abstrações só quando há ≥ 3 usos reais
+
+## Formatos de Output
+
+### ADR
 
 ```markdown
-## ADR-XXX: [Title]
+## ADR-XXX: [Título]
 
 **Status**: Aceito | Proposto | Deprecado
 **Data**: YYYY-MM-DD
 
 ### Contexto
-[Why this decision was needed]
+[Por que esta decisão foi necessária agora]
 
-### Opcoes Consideradas
-1. **Option A** — [pros/cons]
-2. **Option B** — [pros/cons]
+### Opções Consideradas
+1. **Opção A** — [prós/contras]
+2. **Opção B** — [prós/contras]
 
-### Decisao
-[Chosen option and why]
+### Decisão
+[Opção escolhida e justificativa no contexto solo dev / MVP]
 
-### Consequencias
-[Trade-offs accepted]
+### Consequências
+[Trade-offs aceitos — incluir os negativos]
 ```
+
+### Tech Spec (Design de Módulo)
+
+```markdown
+## Tech Spec: [Nome do Módulo ou Feature]
+
+**Épico**: Epic-N
+**Data**: YYYY-MM-DD
+
+### Responsabilidade
+[O que este módulo faz — e explicitamente o que NÃO faz]
+
+### Interfaces
+[Endpoints expostos, eventos emitidos/consumidos, dependências de outros módulos]
+
+### NFRs Relevantes
+[Apenas os NFRs que impactam este design — omitir os irrelevantes]
+
+### Decisões Internas
+[Escolhas de design dentro do módulo que não chegam a ser ADR]
+
+### Riscos
+[O que pode dar errado no contexto deste MVP]
+```
+
+## Critério de Conclusão
+
+### ADR completo quando:
+- [ ] Contexto explica **por que** a decisão foi necessária agora (não apenas o que foi decidido)
+- [ ] Pelo menos 2 opções consideradas com prós/contras reais
+- [ ] Decisão justificada no contexto **solo dev / MVP** — não em boas práticas genéricas
+- [ ] Consequências incluem os **trade-offs negativos** aceitos
+- [ ] Status definido (`Aceito`, `Proposto` ou `Deprecado`)
+- [ ] Número sequencial adicionado ao índice de ADRs neste arquivo
+
+### Tech Spec completo quando:
+- [ ] Escopo definido: o que o módulo faz **e o que não faz**
+- [ ] Interfaces documentadas (endpoints, eventos emitidos/consumidos, dependências)
+- [ ] Tenant isolation verificado para todas as tabelas envolvidas
+- [ ] NFRs relevantes respondidos (mesmo que seja "não aplicável no MVP")
+- [ ] `CLAUDE.md` de módulo previsto ou já criado
 
 ## Principles for This Project
 
