@@ -9,8 +9,8 @@ Gerencia visão geral da agência: stats de doutores, pacientes, consultas.
 
 | Arquivo | Responsabilidade |
 |---------|-----------------|
-| `agency.controller.ts` | Rotas `GET /api/v1/agency/*` — aplica `JwtAuthGuard` + `RolesGuard` no nível do controller |
-| `agency.service.ts` | Queries Knex para stats e listagens da agência |
+| `agency.controller.ts` | Rotas `GET /api/v1/agency/*` e `PATCH /api/v1/agency/*` — aplica `JwtAuthGuard` + `RolesGuard` no nível do controller |
+| `agency.service.ts` | Queries Knex para stats, listagens e atualizações da agência |
 | `agency.module.ts` | Registra controller e service; não precisa importar `DatabaseModule` pois ele é `@Global()` |
 | `agency.service.spec.ts` | Testes unitários do `AgencyService` — mock manual do Knex via Symbol token `KNEX` |
 
@@ -24,15 +24,16 @@ Gerencia visão geral da agência: stats de doutores, pacientes, consultas.
 ## Padrões adotados
 
 - Knex injetado via `@Inject(KNEX)` onde `KNEX` é o Symbol de `@/database/knex.provider`
-- Nenhum DTO de request necessário no dashboard (GET sem parâmetros)
+- DTOs de query params usam `z.coerce.number()` para page/limit (HTTP entrega strings)
 - Guards aplicados no controller class-level — todos os handlers herdam automaticamente
+- `@Roles` no método sobrescreve o da class (`getAllAndOverride`): endpoints admin-only usam `@Roles('agency_admin')` no handler
 
 ## O que NÃO pertence a este módulo
 
 - Auth (login, refresh, forgot-password) → módulo `auth/`
 - Convites → módulo `invite/`
 - Lógica de tenant (portal do doutor) → futuro módulo `tenant/`
-- Listagem e gestão de membros da agência → futuro endpoint neste mesmo módulo (Epic 2 — US 2.x)
+- Lógica de tenant (portal do doutor) → futuro módulo `tenant/`
 
 ## Como rodar / testar isoladamente
 

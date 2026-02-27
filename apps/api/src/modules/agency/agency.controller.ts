@@ -6,6 +6,8 @@ import { Roles } from '@/common/decorators/roles.decorator'
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 import { ListDoctorsQuerySchema, ListDoctorsQueryDto } from './dto/list-doctors.dto'
 import { UpdateDoctorStatusSchema, UpdateDoctorStatusDto } from './dto/update-doctor-status.dto'
+import { ListMembersQuerySchema, ListMembersQueryDto } from './dto/list-members.dto'
+import { UpdateMemberStatusSchema, UpdateMemberStatusDto } from './dto/update-member-status.dto'
 
 @Controller('api/v1/agency')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -33,5 +35,21 @@ export class AgencyController {
     @Body(new ZodValidationPipe(UpdateDoctorStatusSchema)) body: UpdateDoctorStatusDto,
   ) {
     return this.agencyService.updateDoctorStatus(id, body.status)
+  }
+
+  // US-2.4: Listagem paginada de membros da agência — agency_admin e agency_member podem listar
+  @Get('members')
+  listMembers(@Query(new ZodValidationPipe(ListMembersQuerySchema)) query: ListMembersQueryDto) {
+    return this.agencyService.listMembers(query.page, query.limit, query.status)
+  }
+
+  // US-2.4: Atualização de status de um membro — apenas agency_admin
+  @Patch('members/:id/status')
+  @Roles('agency_admin')
+  updateMemberStatus(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(UpdateMemberStatusSchema)) body: UpdateMemberStatusDto,
+  ) {
+    return this.agencyService.updateMemberStatus(id, body.status)
   }
 }

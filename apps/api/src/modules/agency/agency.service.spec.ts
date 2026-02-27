@@ -217,6 +217,87 @@ function buildDashboardKnex({
   }
 }
 
+/**
+ * Constrói um builder encadeável para a query de dados de listMembers.
+ *
+ * Cadeia real no service:
+ *   knex('agency_members').select(...).orderBy(...).limit(...).offset(...)
+ *   com um .where(...) opcional inserido antes de offset quando status é fornecido.
+ *
+ * offset é o método terminal — usa mockResolvedValue.
+ * Todos os demais métodos encadeáveis usam mockReturnThis().
+ */
+function buildMembersListBuilder(rows: object[]): MockListBuilder {
+  const builder: MockListBuilder = {
+    join: jest.fn().mockReturnThis(),    // não usado em members, mas satisfaz a interface
+    select: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    offset: jest.fn().mockResolvedValue(rows),
+  }
+  return builder
+}
+
+/**
+ * Monta o mock do Knex completo para listMembers.
+ *
+ * knex() é chamado duas vezes:
+ *  1. knex('agency_members') → listBuilder  (query de dados)
+ *  2. knex('agency_members') → countBuilder (query de contagem)
+ */
+function buildListMembersKnex({
+  rows = [] as object[],
+  total = '0',
+}: {
+  rows?: object[]
+  total?: string
+} = {}) {
+  const listBuilder = buildMembersListBuilder(rows)
+  const countBuilder = buildListCountBuilder(total)
+
+  const mockKnexFn = jest.fn() as KnexMockFn
+  mockKnexFn
+    .mockReturnValueOnce(listBuilder)   // 1ª call: query de dados
+    .mockReturnValueOnce(countBuilder)  // 2ª call: query de contagem
+
+  mockKnexFn.fn = { now: jest.fn().mockReturnValue('NOW()') }
+
+  return { mockKnexFn, listBuilder, countBuilder }
+}
+
+/**
+ * Monta o mock do Knex para updateMemberStatus.
+ *
+ * knex() é chamado até duas vezes:
+ *  1. knex('agency_members').where('id', id).select('id') → findBuilder
+ *  2. knex('agency_members').where('id', id).update({...}) → updateBuilder (se membro existe)
+ */
+function buildUpdateMemberStatusKnex({ found = true }: { found?: boolean } = {}): {
+  mockKnexFn: KnexMockFn
+  findBuilder: MockFindByIdBuilder
+  updateBuilder: MockUpdateBuilder | null
+} {
+  const findBuilder: MockFindByIdBuilder = {
+    where: jest.fn().mockReturnThis(),
+    select: jest.fn().mockResolvedValue(found ? [{ id: 'member-uuid-1' }] : []),
+  }
+
+  const mockKnexFn = jest.fn() as KnexMockFn
+  mockKnexFn.fn = { now: jest.fn().mockReturnValue('NOW()') }
+
+  if (found) {
+    const updateBuilder = buildUpdateStatusBuilder()
+    mockKnexFn
+      .mockReturnValueOnce(findBuilder)   // 1ª call: buscar membro
+      .mockReturnValueOnce(updateBuilder) // 2ª call: atualizar status
+    return { mockKnexFn, findBuilder, updateBuilder }
+  }
+
+  mockKnexFn.mockReturnValueOnce(findBuilder) // 1ª call: buscar membro (não encontrado)
+  return { mockKnexFn, findBuilder, updateBuilder: null }
+}
+
 function buildFindByIdBuilder(found: boolean): MockFindByIdBuilder {
   return {
     where: jest.fn().mockReturnThis(),
@@ -796,6 +877,454 @@ describe('AgencyService', () => {
 
         const selectArgs: string[] = listBuilder.select.mock.calls.flat()
         expect(selectArgs).toContain('d.created_at as createdAt')
+      })
+    })
+  })
+
+  // ==========================================================================
+  // US-2.4 — listMembers
+  // ==========================================================================
+
+  describe('listMembers', () => {
+    // -------------------------------------------------------------------------
+    // Estrutura de retorno
+    // -------------------------------------------------------------------------
+
+    describe('Estrutura de retorno', () => {
+      it('retorna objeto com campos "data" e "pagination"', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ rows: [], total: '0' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(result).toHaveProperty('data')
+        expect(result).toHaveProperty('pagination')
+      })
+
+      it('pagination contém page, limit, total e totalPages', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ rows: [], total: '5' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(Object.keys(result.pagination).sort()).toEqual([
+          'limit',
+          'page',
+          'total',
+          'totalPages',
+        ])
+      })
+
+      it('data contém os rows retornados pelo banco', async () => {
+        const rows = [
+          {
+            id: 'member-uuid-1',
+            name: 'Admin Nocrato',
+            email: 'admin@nocrato.com',
+            role: 'agency_admin',
+            status: 'active',
+            last_login_at: '2024-01-01T00:00:00.000Z',
+            created_at: '2024-01-01T00:00:00.000Z',
+          },
+        ]
+        const { mockKnexFn } = buildListMembersKnex({ rows, total: '1' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(result.data).toEqual(rows)
+      })
+
+      it('retorna data: [] e pagination.total = 0 quando banco está vazio', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ rows: [], total: '0' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(result.data).toEqual([])
+        expect(result.pagination.total).toBe(0)
+      })
+
+      it('data não expõe password_hash', async () => {
+        // O service não seleciona password_hash — o mock não o inclui nos rows.
+        // Verificamos que o select do builder nunca incluiu esse campo.
+        const { mockKnexFn, listBuilder } = buildListMembersKnex({ rows: [], total: '0' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20)
+
+        const selectArgs: string[] = listBuilder.select.mock.calls.flat()
+        expect(selectArgs.join(',')).not.toContain('password_hash')
+      })
+    })
+
+    // -------------------------------------------------------------------------
+    // Paginação
+    // -------------------------------------------------------------------------
+
+    describe('Paginação', () => {
+      it('pagination.total reflete o count retornado pelo banco', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ total: '42' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(result.pagination.total).toBe(42)
+      })
+
+      it('pagination.total é do tipo Number (não string)', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ total: '7' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(typeof result.pagination.total).toBe('number')
+      })
+
+      it('pagination.totalPages = ceil(total / limit)', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ total: '42' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(result.pagination.totalPages).toBe(Math.ceil(42 / 20)) // 3
+      })
+
+      it('totalPages = 1 quando total <= limit', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ total: '5' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(result.pagination.totalPages).toBe(1)
+      })
+
+      it('totalPages = 0 quando total = 0', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ total: '0' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(result.pagination.totalPages).toBe(0)
+      })
+
+      it('pagination.page e pagination.limit espelham os parâmetros recebidos', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ total: '100' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(3, 10)
+
+        expect(result.pagination.page).toBe(3)
+        expect(result.pagination.limit).toBe(10)
+      })
+
+      it('offset é calculado corretamente: (page - 1) * limit', async () => {
+        const { mockKnexFn, listBuilder } = buildListMembersKnex({ total: '100' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(3, 10)
+
+        // page=3, limit=10 → offset = (3-1)*10 = 20
+        expect(listBuilder.offset).toHaveBeenCalledWith(20)
+      })
+
+      it('offset = 0 para page = 1', async () => {
+        const { mockKnexFn, listBuilder } = buildListMembersKnex({ total: '50' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20)
+
+        expect(listBuilder.offset).toHaveBeenCalledWith(0)
+      })
+    })
+
+    // -------------------------------------------------------------------------
+    // Filtro por status
+    // -------------------------------------------------------------------------
+
+    describe('Filtro por status', () => {
+      it('aplica where("status", status) na query de dados quando status é fornecido', async () => {
+        const { mockKnexFn, listBuilder } = buildListMembersKnex({ total: '3' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20, 'active')
+
+        expect(listBuilder.where).toHaveBeenCalledWith('status', 'active')
+      })
+
+      it('aplica where na query de contagem quando status é fornecido', async () => {
+        const { mockKnexFn, countBuilder } = buildListMembersKnex({ total: '3' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20, 'inactive')
+
+        expect(countBuilder.where).toHaveBeenCalledWith('status', 'inactive')
+      })
+
+      it('aceita status "pending" como filtro válido', async () => {
+        const { mockKnexFn, listBuilder } = buildListMembersKnex({ total: '2' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20, 'pending')
+
+        expect(listBuilder.where).toHaveBeenCalledWith('status', 'pending')
+      })
+
+      it('não aplica where quando status é undefined', async () => {
+        const { mockKnexFn, listBuilder, countBuilder } = buildListMembersKnex({ total: '10' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20)
+
+        expect(listBuilder.where).not.toHaveBeenCalled()
+        expect(countBuilder.where).not.toHaveBeenCalled()
+      })
+    })
+
+    // -------------------------------------------------------------------------
+    // Queries Knex
+    // -------------------------------------------------------------------------
+
+    describe('Queries Knex', () => {
+      it('executa as duas queries em paralelo via Promise.all (knex chamado 2 vezes)', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ total: '5' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20)
+
+        expect(mockKnexFn).toHaveBeenCalledTimes(2)
+      })
+
+      it('ambas as calls ao knex() usam "agency_members"', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ total: '5' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20)
+
+        expect(mockKnexFn).toHaveBeenNthCalledWith(1, 'agency_members')
+        expect(mockKnexFn).toHaveBeenNthCalledWith(2, 'agency_members')
+      })
+
+      it('query de dados aplica o limit correto', async () => {
+        const { mockKnexFn, listBuilder } = buildListMembersKnex({ total: '50' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(2, 15)
+
+        expect(listBuilder.limit).toHaveBeenCalledWith(15)
+      })
+
+      it('query de contagem usa count("id as count")', async () => {
+        const { mockKnexFn, countBuilder } = buildListMembersKnex({ total: '10' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20)
+
+        expect(countBuilder.count).toHaveBeenCalledWith('id as count')
+      })
+
+      it('select inclui os campos permitidos: id, name, email, role, status, last_login_at, created_at', async () => {
+        const { mockKnexFn, listBuilder } = buildListMembersKnex({ total: '1' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20)
+
+        const selectArgs: string[] = listBuilder.select.mock.calls.flat()
+        expect(selectArgs).toContain('id')
+        expect(selectArgs).toContain('name')
+        expect(selectArgs).toContain('email')
+        expect(selectArgs).toContain('role')
+        expect(selectArgs).toContain('status')
+        expect(selectArgs).toContain('last_login_at')
+        expect(selectArgs).toContain('created_at')
+      })
+
+      it('converte string do PostgreSQL para number com Number()', async () => {
+        const { mockKnexFn } = buildListMembersKnex({ total: '99' })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.listMembers(1, 20)
+
+        expect(result.pagination.total).toBe(99)
+        expect(typeof result.pagination.total).toBe('number')
+      })
+
+      it('não filtra por tenant_id (agency_members não é tenant-scoped)', async () => {
+        const { mockKnexFn, listBuilder, countBuilder } = buildListMembersKnex({ total: '5' })
+        const service = await buildModule(mockKnexFn)
+
+        await service.listMembers(1, 20)
+
+        // where não foi chamado (sem filtro de status), logo tenant_id nunca aparece
+        expect(listBuilder.where).not.toHaveBeenCalled()
+        expect(countBuilder.where).not.toHaveBeenCalled()
+      })
+    })
+  })
+
+  // ==========================================================================
+  // US-2.4 — updateMemberStatus
+  // ==========================================================================
+
+  describe('updateMemberStatus', () => {
+    // ------------------------------------------------------------------------
+    // Happy path
+    // ------------------------------------------------------------------------
+
+    describe('Happy path', () => {
+      it('retorna { id, status } quando o membro existe e é atualizado', async () => {
+        const { mockKnexFn } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.updateMemberStatus('member-uuid-1', 'inactive')
+
+        expect(result).toEqual({ id: 'member-uuid-1', status: 'inactive' })
+      })
+
+      it('retorna o status "active" corretamente ao reativar um membro', async () => {
+        const { mockKnexFn } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.updateMemberStatus('member-uuid-1', 'active')
+
+        expect(result).toEqual({ id: 'member-uuid-1', status: 'active' })
+      })
+
+      it('retorna o status "pending" corretamente', async () => {
+        const { mockKnexFn } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.updateMemberStatus('member-uuid-1', 'pending')
+
+        expect(result).toEqual({ id: 'member-uuid-1', status: 'pending' })
+      })
+
+      it('retorna o id exatamente como recebido (sem mutação)', async () => {
+        const { mockKnexFn } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.updateMemberStatus('member-uuid-1', 'inactive')
+
+        expect(result.id).toBe('member-uuid-1')
+      })
+    })
+
+    // ------------------------------------------------------------------------
+    // NotFoundException
+    // ------------------------------------------------------------------------
+
+    describe('NotFoundException', () => {
+      it('lança NotFoundException quando o membro não existe', async () => {
+        const { mockKnexFn } = buildUpdateMemberStatusKnex({ found: false })
+        const service = await buildModule(mockKnexFn)
+
+        await expect(service.updateMemberStatus('id-inexistente', 'active')).rejects.toThrow(
+          NotFoundException,
+        )
+      })
+
+      it('mensagem da NotFoundException é "Membro não encontrado"', async () => {
+        const { mockKnexFn } = buildUpdateMemberStatusKnex({ found: false })
+        const service = await buildModule(mockKnexFn)
+
+        await expect(service.updateMemberStatus('id-inexistente', 'active')).rejects.toThrow(
+          'Membro não encontrado',
+        )
+      })
+
+      it('não executa o UPDATE quando o membro não existe', async () => {
+        const { mockKnexFn } = buildUpdateMemberStatusKnex({ found: false })
+        const service = await buildModule(mockKnexFn)
+
+        await expect(service.updateMemberStatus('id-inexistente', 'active')).rejects.toThrow()
+
+        // Apenas 1 chamada ao knex (a de busca), nunca a de update
+        expect(mockKnexFn).toHaveBeenCalledTimes(1)
+      })
+    })
+
+    // ------------------------------------------------------------------------
+    // Queries Knex
+    // ------------------------------------------------------------------------
+
+    describe('Queries Knex', () => {
+      it('busca o membro na primeira call com where("id", id)', async () => {
+        const { mockKnexFn, findBuilder } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateMemberStatus('member-uuid-1', 'active')
+
+        expect(findBuilder.where).toHaveBeenCalledWith('id', 'member-uuid-1')
+      })
+
+      it('select na busca usa apenas "id"', async () => {
+        const { mockKnexFn, findBuilder } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateMemberStatus('member-uuid-1', 'active')
+
+        expect(findBuilder.select).toHaveBeenCalledWith('id')
+      })
+
+      it('executa update com where("id", id) correto', async () => {
+        const { mockKnexFn, updateBuilder } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateMemberStatus('member-uuid-1', 'inactive')
+
+        expect(updateBuilder!.where).toHaveBeenCalledWith('id', 'member-uuid-1')
+      })
+
+      it('atualiza o campo status no update', async () => {
+        const { mockKnexFn, updateBuilder } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateMemberStatus('member-uuid-1', 'inactive')
+
+        const updateArgs = updateBuilder!.update.mock.calls[0][0]
+        expect(updateArgs.status).toBe('inactive')
+      })
+
+      it('inclui updated_at no update via knex.fn.now()', async () => {
+        const { mockKnexFn, updateBuilder } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateMemberStatus('member-uuid-1', 'active')
+
+        const updateArgs = updateBuilder!.update.mock.calls[0][0]
+        expect(updateArgs).toHaveProperty('updated_at')
+      })
+
+      it('faz exatamente 2 chamadas ao knex quando o membro existe', async () => {
+        const { mockKnexFn } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateMemberStatus('member-uuid-1', 'active')
+
+        expect(mockKnexFn).toHaveBeenCalledTimes(2)
+      })
+
+      it('ambas as chamadas ao knex usam "agency_members"', async () => {
+        const { mockKnexFn } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateMemberStatus('member-uuid-1', 'active')
+
+        expect(mockKnexFn).toHaveBeenNthCalledWith(1, 'agency_members')
+        expect(mockKnexFn).toHaveBeenNthCalledWith(2, 'agency_members')
+      })
+
+      it('não filtra por tenant_id (agency_members não é tenant-scoped)', async () => {
+        const { mockKnexFn, findBuilder, updateBuilder } = buildUpdateMemberStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateMemberStatus('member-uuid-1', 'active')
+
+        const findWhereCalls = JSON.stringify(findBuilder.where.mock.calls)
+        const updateWhereCalls = JSON.stringify(updateBuilder!.where.mock.calls)
+
+        expect(findWhereCalls).not.toContain('tenant_id')
+        expect(updateWhereCalls).not.toContain('tenant_id')
       })
     })
   })

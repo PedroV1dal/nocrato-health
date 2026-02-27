@@ -50,9 +50,9 @@
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] GET /api/v1/agency/members?page=1&limit=20
-- [ ] PATCH /api/v1/agency/members/:id/status { status }
-- [ ] **Criterio:** CRUD basico de membros
+- [x] GET /api/v1/agency/members?page=1&limit=20
+- [x] PATCH /api/v1/agency/members/:id/status { status }
+- [x] **Criterio:** CRUD basico de membros
 
 ---
 
