@@ -188,16 +188,18 @@ export function DoctorLoginPage() {
                   Entrar
                 </Button>
 
-                <button
+                <Button
                   type="button"
-                  className="w-full text-xs text-blue-steel hover:underline mt-1"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
                   onClick={() => {
                     setStep('email')
                     setServerError(null)
                   }}
                 >
                   Usar outro email
-                </button>
+                </Button>
               </form>
             )}
           </CardContent>

@@ -13,7 +13,7 @@ const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
       className={cn(
         'relative w-full rounded-lg border px-4 py-3 text-sm',
         {
-          'bg-blue-50 border-blue-200 text-blue-800': variant === 'default',
+          'bg-blue-steel/10 border-blue-steel/30 text-blue-steel': variant === 'default',
           'bg-red-50 border-red-200 text-red-800': variant === 'destructive',
           'bg-green-50 border-green-200 text-green-800': variant === 'success',
         },

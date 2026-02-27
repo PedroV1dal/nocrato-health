@@ -6,7 +6,11 @@
       "Bash(git -C /home/vidales/nocrato-health-v2 status)",
       "Bash(git -C /home/vidales/nocrato-health-v2 log --oneline -5)",
       "Bash(git add CLAUDE.md .claude/settings.json .claude/skills/)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git add docs/database/migrations/015_alter_doctors_nullable_crm.sql docs/database/migrations/016_alter_invites_password_reset.sql docs/database/schema.sql docs/database/migrations.md)",
+      "Bash(git add apps/api/package.json pnpm-lock.yaml apps/api/src/app.module.ts apps/api/src/config/env.ts apps/api/src/modules/auth/ apps/api/src/modules/email/ apps/api/src/modules/invite/)",
+      "Bash(git add apps/web/)",
+      "Bash(git add docs/roadmap/epic-1-auth.md)"
     ]
   }
 }

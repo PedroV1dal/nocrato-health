@@ -109,11 +109,15 @@ export function DoctorInvitePage() {
   if (tokenError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cream p-4">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md space-y-6">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-amber-dark font-heading">Nocrato Health</h1>
+            <p className="text-sm text-gray-500 mt-1">Portal do Médico</p>
+          </div>
           <Alert variant="destructive">
             <AlertDescription>{tokenError}</AlertDescription>
           </Alert>
-          <div className="mt-4 text-center">
+          <div className="text-center">
             <Link to="/doctor/login" className="text-xs text-blue-steel hover:underline">
               Ir para o login
             </Link>
@@ -125,8 +129,25 @@ export function DoctorInvitePage() {
 
   if (!inviteData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-cream">
-        <p className="text-gray-500 text-sm">Validando convite...</p>
+      <div className="min-h-screen flex items-center justify-center bg-cream p-4">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div>
+            <h1 className="text-3xl font-bold text-amber-dark font-heading">Nocrato Health</h1>
+            <p className="text-sm text-gray-500 mt-1">Portal do Médico</p>
+          </div>
+          <div className="flex items-center justify-center gap-2 text-gray-500 text-sm">
+            <svg
+              className="animate-spin h-4 w-4"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Validando convite...
+          </div>
+        </div>
       </div>
     )
   }
@@ -171,12 +192,16 @@ export function DoctorInvitePage() {
                   URL do seu portal{' '}
                   <span className="text-gray-400 font-normal text-xs">(identificador único)</span>
                 </Label>
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-400 whitespace-nowrap">nocrato.com/</span>
-                  <Input
+                <div
+                  className={`flex items-center rounded-md border bg-white overflow-hidden focus-within:ring-2 focus-within:ring-amber-bright focus-within:ring-offset-1 ${errors.slug ? 'border-red-500' : 'border-blue-steel/40'}`}
+                >
+                  <span className="px-3 text-xs text-gray-400 whitespace-nowrap border-r border-blue-steel/20 bg-gray-50 h-10 flex items-center select-none">
+                    nocrato.com/
+                  </span>
+                  <input
                     id="slug"
                     placeholder="dr-silva"
-                    error={!!errors.slug}
+                    className="flex-1 h-10 px-3 text-sm bg-white outline-none placeholder:text-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
                     {...register('slug', {
                       onChange: () => {
                         slugEditedManually.current = true
