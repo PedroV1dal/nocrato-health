@@ -10,13 +10,14 @@
 
 ---
 
-## US-2.1: Como admin, quero ver o dashboard com metricas gerais
+## US-2.1: Como admin, quero ver o dashboard com metricas gerais ✅
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] GET /api/v1/agency/dashboard → { totalDoctors, activeDoctors, totalPatients, ... }
-- [ ] modules/agency/agency.controller.ts
-- [ ] **Criterio:** Retorna stats corretos
+- [x] GET /api/v1/agency/dashboard → { totalDoctors, activeDoctors, totalPatients, totalAppointments, upcomingAppointments }
+- [x] modules/agency/agency.controller.ts + agency.service.ts + agency.module.ts
+- [x] **Criterio:** Retorna stats corretos — 13 testes unitários, 149/149 passando
+- [x] Tech-lead: APROVADO (OBS-TL-1: knex.fn.now() em WHERE aceito para MVP)
 
 ---
 
