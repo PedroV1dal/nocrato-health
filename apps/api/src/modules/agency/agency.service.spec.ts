@@ -27,6 +27,7 @@ jest.mock('@/config/env', () => ({
 
 import { Test, TestingModule } from '@nestjs/testing'
 import { AgencyService } from './agency.service'
+import { NotFoundException } from '@nestjs/common'
 import { KNEX } from '@/database/knex.provider'
 
 // ---------------------------------------------------------------------------
@@ -53,6 +54,16 @@ interface MockListCountBuilder {
   // count is the terminal call — mockResolvedValue returns [{count: string}]
   count: jest.Mock
   where: jest.Mock
+}
+
+interface MockFindByIdBuilder {
+  where: jest.Mock
+  select: jest.Mock
+}
+
+interface MockUpdateBuilder {
+  where: jest.Mock
+  update: jest.Mock
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +215,41 @@ function buildDashboardKnex({
     totalAppointmentsBuilder,
     upcomingAppointmentsBuilder,
   }
+}
+
+function buildFindByIdBuilder(found: boolean): MockFindByIdBuilder {
+  return {
+    where: jest.fn().mockReturnThis(),
+    select: jest.fn().mockResolvedValue(found ? [{ id: 'doctor-uuid-1' }] : []),
+  }
+}
+
+function buildUpdateStatusBuilder(): MockUpdateBuilder {
+  return {
+    where: jest.fn().mockReturnThis(),
+    update: jest.fn().mockResolvedValue(1),
+  }
+}
+
+function buildUpdateDoctorStatusKnex({ found = true }: { found?: boolean } = {}): {
+  mockKnexFn: KnexMockFn
+  findBuilder: MockFindByIdBuilder
+  updateBuilder: MockUpdateBuilder | null
+} {
+  const findBuilder = buildFindByIdBuilder(found)
+  const mockKnexFn = jest.fn() as KnexMockFn
+  mockKnexFn.fn = { now: jest.fn().mockReturnValue('NOW()') }
+
+  if (found) {
+    const updateBuilder = buildUpdateStatusBuilder()
+    mockKnexFn
+      .mockReturnValueOnce(findBuilder)   // 1ª call: buscar doutor
+      .mockReturnValueOnce(updateBuilder) // 2ª call: atualizar status
+    return { mockKnexFn, findBuilder, updateBuilder }
+  }
+
+  mockKnexFn.mockReturnValueOnce(findBuilder) // 1ª call: buscar doutor (não encontrado)
+  return { mockKnexFn, findBuilder, updateBuilder: null }
 }
 
 // ---------------------------------------------------------------------------
@@ -750,6 +796,164 @@ describe('AgencyService', () => {
 
         const selectArgs: string[] = listBuilder.select.mock.calls.flat()
         expect(selectArgs).toContain('d.created_at as createdAt')
+      })
+    })
+  })
+
+  // ==========================================================================
+  // US-2.3 — updateDoctorStatus
+  // ==========================================================================
+
+  describe('updateDoctorStatus', () => {
+    // ------------------------------------------------------------------------
+    // Happy path
+    // ------------------------------------------------------------------------
+
+    describe('Happy path', () => {
+      it('retorna { id, status } quando o doutor existe e é atualizado', async () => {
+        const { mockKnexFn } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.updateDoctorStatus('doctor-uuid-1', 'inactive')
+
+        expect(result).toEqual({ id: 'doctor-uuid-1', status: 'inactive' })
+      })
+
+      it('retorna o status "active" corretamente ao reativar um doutor', async () => {
+        const { mockKnexFn } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.updateDoctorStatus('doctor-uuid-1', 'active')
+
+        expect(result).toEqual({ id: 'doctor-uuid-1', status: 'active' })
+      })
+
+      it('retorna o id exatamente como recebido (sem mutação)', async () => {
+        const { mockKnexFn } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        const result = await service.updateDoctorStatus('doctor-uuid-1', 'inactive')
+
+        expect(result.id).toBe('doctor-uuid-1')
+      })
+    })
+
+    // ------------------------------------------------------------------------
+    // NotFoundException
+    // ------------------------------------------------------------------------
+
+    describe('NotFoundException', () => {
+      it('lança NotFoundException quando o doutor não existe', async () => {
+        const { mockKnexFn } = buildUpdateDoctorStatusKnex({ found: false })
+        const service = await buildModule(mockKnexFn)
+
+        await expect(service.updateDoctorStatus('id-inexistente', 'active')).rejects.toThrow(
+          NotFoundException,
+        )
+      })
+
+      it('mensagem da NotFoundException é "Doutor não encontrado"', async () => {
+        const { mockKnexFn } = buildUpdateDoctorStatusKnex({ found: false })
+        const service = await buildModule(mockKnexFn)
+
+        await expect(service.updateDoctorStatus('id-inexistente', 'active')).rejects.toThrow(
+          'Doutor não encontrado',
+        )
+      })
+
+      it('não executa o UPDATE quando o doutor não existe', async () => {
+        const { mockKnexFn } = buildUpdateDoctorStatusKnex({ found: false })
+        const service = await buildModule(mockKnexFn)
+
+        await expect(service.updateDoctorStatus('id-inexistente', 'active')).rejects.toThrow()
+
+        // Apenas 1 chamada ao knex (a de busca), nunca a de update
+        expect(mockKnexFn).toHaveBeenCalledTimes(1)
+      })
+    })
+
+    // ------------------------------------------------------------------------
+    // Queries Knex
+    // ------------------------------------------------------------------------
+
+    describe('Queries Knex', () => {
+      it('busca o doutor na primeira call com where("id", id)', async () => {
+        const { mockKnexFn, findBuilder } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateDoctorStatus('doctor-uuid-1', 'active')
+
+        expect(findBuilder.where).toHaveBeenCalledWith('id', 'doctor-uuid-1')
+      })
+
+      it('select na busca usa apenas "id"', async () => {
+        const { mockKnexFn, findBuilder } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateDoctorStatus('doctor-uuid-1', 'active')
+
+        expect(findBuilder.select).toHaveBeenCalledWith('id')
+      })
+
+      it('executa update com where("id", id) correto', async () => {
+        const { mockKnexFn, updateBuilder } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateDoctorStatus('doctor-uuid-1', 'inactive')
+
+        expect(updateBuilder!.where).toHaveBeenCalledWith('id', 'doctor-uuid-1')
+      })
+
+      it('atualiza o campo status no update', async () => {
+        const { mockKnexFn, updateBuilder } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateDoctorStatus('doctor-uuid-1', 'inactive')
+
+        const updateArgs = updateBuilder!.update.mock.calls[0][0]
+        expect(updateArgs.status).toBe('inactive')
+      })
+
+      it('inclui updated_at no update', async () => {
+        const { mockKnexFn, updateBuilder } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateDoctorStatus('doctor-uuid-1', 'active')
+
+        const updateArgs = updateBuilder!.update.mock.calls[0][0]
+        expect(updateArgs).toHaveProperty('updated_at')
+      })
+
+      it('faz exatamente 2 chamadas ao knex quando o doutor existe', async () => {
+        const { mockKnexFn } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateDoctorStatus('doctor-uuid-1', 'active')
+
+        expect(mockKnexFn).toHaveBeenCalledTimes(2)
+      })
+
+      it('ambas as chamadas ao knex usam "doctors"', async () => {
+        const { mockKnexFn } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateDoctorStatus('doctor-uuid-1', 'active')
+
+        expect(mockKnexFn).toHaveBeenNthCalledWith(1, 'doctors')
+        expect(mockKnexFn).toHaveBeenNthCalledWith(2, 'doctors')
+      })
+
+      it('não filtra por tenant_id (agência pode alterar qualquer doutor)', async () => {
+        const { mockKnexFn, findBuilder, updateBuilder } = buildUpdateDoctorStatusKnex({ found: true })
+        const service = await buildModule(mockKnexFn)
+
+        await service.updateDoctorStatus('doctor-uuid-1', 'active')
+
+        const findWhereCalls = JSON.stringify(findBuilder.where.mock.calls)
+        const updateWhereCalls = JSON.stringify(updateBuilder!.where.mock.calls)
+
+        expect(findWhereCalls).not.toContain('tenant_id')
+        expect(updateWhereCalls).not.toContain('tenant_id')
       })
     })
   })

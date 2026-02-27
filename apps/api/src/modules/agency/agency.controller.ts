@@ -1,10 +1,11 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common'
 import { AgencyService } from './agency.service'
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard'
 import { RolesGuard } from '@/common/guards/roles.guard'
 import { Roles } from '@/common/decorators/roles.decorator'
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 import { ListDoctorsQuerySchema, ListDoctorsQueryDto } from './dto/list-doctors.dto'
+import { UpdateDoctorStatusSchema, UpdateDoctorStatusDto } from './dto/update-doctor-status.dto'
 
 @Controller('api/v1/agency')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -22,5 +23,15 @@ export class AgencyController {
   @Get('doctors')
   listDoctors(@Query(new ZodValidationPipe(ListDoctorsQuerySchema)) query: ListDoctorsQueryDto) {
     return this.agencyService.listDoctors(query.page, query.limit, query.status)
+  }
+
+  // US-2.3: Atualização de status de um doutor
+  @Patch('doctors/:id/status')
+  @Roles('agency_admin')
+  updateDoctorStatus(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(UpdateDoctorStatusSchema)) body: UpdateDoctorStatusDto,
+  ) {
+    return this.agencyService.updateDoctorStatus(id, body.status)
   }
 }

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, NotFoundException } from '@nestjs/common'
 import type { Knex } from 'knex'
 import { KNEX } from '@/database/knex.provider'
 
@@ -58,6 +58,19 @@ export class AgencyService {
         totalPages: Math.ceil(total / limit),
       },
     }
+  }
+
+  // US-2.3: Atualização de status de um doutor pela agência
+  async updateDoctorStatus(id: string, status: 'active' | 'inactive'): Promise<{ id: string; status: string }> {
+    const [doctor] = await this.knex('doctors').where('id', id).select('id')
+
+    if (!doctor) {
+      throw new NotFoundException('Doutor não encontrado')
+    }
+
+    await this.knex('doctors').where('id', id).update({ status, updated_at: this.knex.fn.now() })
+
+    return { id, status }
   }
 
   // US-2.1: Estatísticas globais da agência para o dashboard
