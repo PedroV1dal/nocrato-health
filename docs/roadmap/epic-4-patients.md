@@ -12,6 +12,8 @@
 
 ## US-4.1: Como doutor, quero ver a lista dos meus pacientes
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/patients?page=1&search=Maria&status=active
 - [ ] Retorna: name, phone, email, source, status, created_at
 - [ ] **Criterio:** Listagem paginada com busca por nome/telefone
@@ -20,12 +22,16 @@
 
 ## US-4.2: Como doutor, quero ver o perfil completo de um paciente
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/patients/:id → patient + appointments + notes + documents
 - [ ] **Criterio:** Retorna perfil completo com historico
 
 ---
 
 ## US-4.3: Como doutor, quero criar um paciente manualmente
+
+**Agentes:** `backend` → `tech-lead` → `qa`
 
 - [ ] POST /api/v1/doctor/patients { name, phone, cpf?, email?, dateOfBirth? }
 - [ ] source = 'manual', valida phone unico por tenant
@@ -35,12 +41,16 @@
 
 ## US-4.4: Como doutor, quero editar dados de um paciente
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] PATCH /api/v1/doctor/patients/:id { name?, phone?, cpf?, email?, status? }
 - [ ] **Criterio:** Update funcional
 
 ---
 
 ## US-4.5: [FRONTEND] Paginas de pacientes
+
+**Agentes:** `frontend` → `designer` → `qa`
 
 - [ ] routes/doctor/_layout/patients/index.tsx (lista com cards + busca + filtro status)
 - [ ] routes/doctor/_layout/patients/$patientId.tsx (perfil com tabs)

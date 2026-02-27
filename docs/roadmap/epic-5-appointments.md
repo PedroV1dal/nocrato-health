@@ -12,6 +12,8 @@
 
 ## US-5.1: Como doutor, quero ver minhas consultas (com filtros)
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/appointments?status=scheduled&date=2024-01-15&page=1
 - [ ] Filtros: status, data, paciente
 - [ ] **Criterio:** Listagem com filtros funcionais
@@ -19,6 +21,8 @@
 ---
 
 ## US-5.2: Como doutor, quero criar uma consulta manualmente
+
+**Agentes:** `backend` + `dba` → `tech-lead` → `qa`
 
 - [ ] POST /api/v1/doctor/appointments { patientId, dateTime, durationMinutes? }
 - [ ] created_by = 'doctor', status = 'scheduled'
@@ -28,6 +32,8 @@
 ---
 
 ## US-5.3: Como doutor, quero alterar o status de uma consulta
+
+**Agentes:** `backend` → `tech-lead` → `qa`
 
 - [ ] PATCH /api/v1/doctor/appointments/:id/status { status }
 - [ ] Transicoes validas:
@@ -46,6 +52,8 @@
 
 ## US-5.4: Como doutor, quero ver o detalhe de uma consulta
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/appointments/:id → appointment + patient + notes
 - [ ] **Criterio:** Retorna dados completos
 
@@ -53,12 +61,16 @@
 
 ## US-5.5: Como doutor, quero ver meu dashboard com consultas de hoje
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/dashboard → { todayAppointments, totalPatients, pendingFollowUps }
 - [ ] **Criterio:** Stats corretos
 
 ---
 
 ## US-5.6: [FRONTEND] Paginas de consultas + dashboard
+
+**Agentes:** `frontend` → `designer` → `qa`
 
 - [ ] routes/doctor/_layout/index.tsx (dashboard: cards + lista consultas de hoje)
 - [ ] routes/doctor/_layout/appointments/index.tsx (lista + filtros + status badges)

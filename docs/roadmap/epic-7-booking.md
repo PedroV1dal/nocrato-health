@@ -12,6 +12,8 @@
 
 ## US-7.1: Como agente interno, quero gerar um token de booking para enviar ao paciente
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] `bookingService.generateToken(tenantId, phone?)` (chamada interna de servico)
 - [ ] Gera token (24h), salva em booking_tokens
 - [ ] Retorna { token, expiresAt, bookingUrl }
@@ -20,6 +22,8 @@
 ---
 
 ## US-7.2: Como paciente, quero ver horarios disponiveis do doutor
+
+**Agentes:** `backend` → `tech-lead` → `qa`
 
 - [ ] `booking.controller.ts` → `GET /api/v1/public/booking/:slug/validate?token=X` — valida token + retorna dados do médico (`{ valid, doctor: { name, specialty }, tenant: { name, primaryColor, logoUrl } }`)
 - [ ] GET /api/v1/public/booking/:slug/slots?date=2024-01-15&token=X
@@ -30,6 +34,8 @@
 ---
 
 ## US-7.3: Como paciente, quero agendar uma consulta
+
+**Agentes:** `backend` → `tech-lead` → `qa`
 
 - [ ] POST /api/v1/public/booking/:slug/book { token, name, phone, dateTime }
 - [ ] Valida token + rate limit + max 2 consultas ativas por phone
@@ -42,6 +48,8 @@
 
 ## US-7.4: Como agente interno, quero consultar slots e agendar in-chat
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] `bookingService.getSlots(tenantId, date)` (chamada interna de servico, sem token de booking)
 - [ ] `bookingService.bookInChat(tenantId, { name, phone, dateTime })` (chamada interna)
 - [ ] Mesmo calculo de slots e validacoes (max 2 ativas por phone, conflito)
@@ -50,6 +58,8 @@
 ---
 
 ## US-7.5: [FRONTEND] Pagina publica de agendamento
+
+**Agentes:** `frontend` → `designer` → `qa`
 
 - [ ] routes/book/$slug.tsx
 - [ ] Valida token na entrada

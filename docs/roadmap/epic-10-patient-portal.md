@@ -12,6 +12,8 @@
 
 ## US-10.1: Como sistema, quero gerar codigo de acesso apos primeira consulta
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] Requer que o EPIC 5 emita evento `appointment.status_changed` com `newStatus='completed'` ao marcar consulta como concluída
 - [ ] Quando appointment.status → 'completed' e paciente nao tem portal_access_code:
   - Gera codigo unico (ex: "ABC-1234-XYZ")
@@ -24,6 +26,8 @@
 
 ## US-10.2: Como paciente, quero acessar meu portal com o codigo
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] POST /api/v1/patient/portal/access { code }
 - [ ] Retorna: { patient, appointments, documents }
   - `// clinicalNotes excluídas: registros internos do médico, não expostos ao paciente`
@@ -33,6 +37,8 @@
 ---
 
 ## US-10.3: [FRONTEND] Portal do paciente
+
+**Agentes:** `frontend` → `designer` → `qa`
 
 - [ ] routes/patient/access.tsx (form: digitar codigo)
 - [ ] routes/patient/portal.tsx (perfil read-only)

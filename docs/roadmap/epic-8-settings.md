@@ -12,6 +12,8 @@
 
 ## US-8.1: Como doutor, quero editar as configuracoes do meu agente
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/agent-settings
 - [ ] PATCH /api/v1/doctor/agent-settings { welcomeMessage?, personality?, faq?, appointmentRules?, bookingMode?, enabled? }
 - [ ] bookingMode: 'link' | 'chat' | 'both'
@@ -21,6 +23,8 @@
 
 ## US-8.2: Como doutor, quero editar meu perfil e horarios
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/profile
 - [ ] PATCH /api/v1/doctor/profile { name?, specialty?, phone?, workingHours?, timezone? }
 - [ ] PATCH /api/v1/doctor/profile/branding { primaryColor?, logoUrl? }
@@ -29,6 +33,8 @@
 ---
 
 ## US-8.3: [FRONTEND] Pagina de configuracoes
+
+**Agentes:** `frontend` → `designer` → `qa`
 
 - [ ] routes/doctor/_layout/settings/index.tsx
 - [ ] Secao 1: Dados do Doutor (nome, CRM, especialidade, telefone)

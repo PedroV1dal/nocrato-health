@@ -12,6 +12,8 @@
 
 ## US-9.1: Como sistema, quero registrar eventos internos e reagir a eles
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] Configurar `@nestjs/event-emitter` no `app.module.ts`
 - [ ] `appointment.service.ts` → emite `appointment.status_changed`, `appointment.cancelled`
 - [ ] `patient.service.ts` → emite `patient.portal_activated`
@@ -21,6 +23,8 @@
 ---
 
 ## US-9.2: Como agente, quero receber mensagens do WhatsApp via webhook
+
+**Agentes:** `backend` → `tech-lead` → `qa`
 
 - [ ] `whatsapp.service.ts` → HTTP client para Evolution API (envio de mensagens)
 - [ ] `agent.controller.ts` → `POST /api/v1/agent/webhook` (recebe payload da Evolution API)
@@ -32,6 +36,8 @@
 ---
 
 ## US-9.3: Como agente, quero processar mensagens com LLM e executar acoes
+
+**Agentes:** `backend` + `dba` → `tech-lead` → `qa`
 
 - [ ] `conversation.service.ts` → CRUD da tabela `conversations` (estado por phone)
 - [ ] Migration `013_conversations.sql` → tabela com `messages` JSONB
@@ -47,6 +53,8 @@
 ---
 
 ## US-9.4: Como agente, quero notificar pacientes sobre eventos do portal
+
+**Agentes:** `backend` → `tech-lead` → `qa`
 
 - [ ] `@OnEvent('appointment.cancelled')` → envia WhatsApp com informacao do cancelamento
 - [ ] `@OnEvent('patient.portal_activated')` → envia codigo de acesso ao portal

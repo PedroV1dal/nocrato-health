@@ -12,6 +12,8 @@
 
 ## US-3.1: Como doutor recem-convidado, quero completar meu onboarding
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/onboarding/status → { currentStep, completed }
 - [ ] PATCH /api/v1/doctor/onboarding/profile { name, specialty, phone, CRM, crmState }
 - [ ] PATCH /api/v1/doctor/onboarding/schedule { workingHours, timezone, appointmentDuration }
@@ -23,6 +25,8 @@
 ---
 
 ## US-3.2: [FRONTEND] Wizard de onboarding
+
+**Agentes:** `frontend` → `designer` → `qa`
 
 - [ ] routes/doctor/_layout/onboarding.tsx (wizard 4 steps com progress bar)
 - [ ] Step 1: Perfil (nome, CRM, especialidade, telefone)

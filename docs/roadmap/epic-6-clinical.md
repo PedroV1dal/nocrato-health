@@ -12,6 +12,8 @@
 
 ## US-6.1: Como doutor, quero criar uma nota clinica durante/apos atendimento
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] POST /api/v1/doctor/clinical-notes { appointmentId, patientId, content }
 - [ ] Emite evento note.created no event_log (agente sabe)
 - [ ] **Criterio:** Nota criada, evento emitido
@@ -20,6 +22,8 @@
 
 ## US-6.2: Como doutor, quero ver notas de um paciente ou consulta
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/clinical-notes?appointmentId=X
 - [ ] GET /api/v1/doctor/clinical-notes?patientId=X&page=1
 - [ ] **Criterio:** Listagem por consulta e por paciente
@@ -27,6 +31,8 @@
 ---
 
 ## US-6.3: Como doutor, quero fazer upload de um documento para um paciente
+
+**Agentes:** `backend` → `tech-lead` → `qa`
 
 - [ ] POST /api/v1/doctor/upload (multipart/form-data) → { fileUrl, fileName }
 - [ ] Salva em ./uploads/{tenantId}/
@@ -38,12 +44,16 @@
 
 ## US-6.4: Como doutor, quero listar documentos de um paciente
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/doctor/documents?patientId=X&type=prescription&page=1
 - [ ] **Criterio:** Listagem com filtro por tipo
 
 ---
 
 ## US-6.5: [FRONTEND] Notas e documentos
+
+**Agentes:** `frontend` → `designer` → `qa`
 
 - [ ] Dialog/pagina para criar nota clinica (a partir da consulta)
 - [ ] Tab "Notas" no perfil do paciente (ja criada no EPIC 4)

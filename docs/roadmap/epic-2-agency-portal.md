@@ -12,6 +12,8 @@
 
 ## US-2.1: Como admin, quero ver o dashboard com metricas gerais
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/agency/dashboard → { totalDoctors, activeDoctors, totalPatients, ... }
 - [ ] modules/agency/agency.controller.ts
 - [ ] **Criterio:** Retorna stats corretos
@@ -19,6 +21,8 @@
 ---
 
 ## US-2.2: Como admin, quero listar todos os doutores
+
+**Agentes:** `backend` → `tech-lead` → `qa`
 
 - [ ] GET /api/v1/agency/doctors?page=1&limit=20&status=active
 - [ ] Retorna lista paginada com: name, email, slug, CRM, specialty, status
@@ -28,6 +32,8 @@
 
 ## US-2.3: Como admin, quero ativar/desativar um doutor
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] PATCH /api/v1/agency/doctors/:id/status { status: 'active' | 'inactive' }
 - [ ] Se inativar: bloqueia novos agendamentos, consultas existentes mantem
 - [ ] **Criterio:** Status muda, booking retorna "indisponivel" se inativo
@@ -36,6 +42,8 @@
 
 ## US-2.4: Como admin, quero listar e gerenciar colaboradores
 
+**Agentes:** `backend` → `tech-lead` → `qa`
+
 - [ ] GET /api/v1/agency/members?page=1&limit=20
 - [ ] PATCH /api/v1/agency/members/:id/status { status }
 - [ ] **Criterio:** CRUD basico de membros
@@ -43,6 +51,8 @@
 ---
 
 ## US-2.5: [FRONTEND] Portal da agencia completo
+
+**Agentes:** `frontend` → `designer` → `qa`
 
 - [ ] routes/agency/_layout.tsx (auth guard + sidebar)
 - [ ] components/agency-sidebar.tsx (Dashboard, Doutores, Colaboradores)
