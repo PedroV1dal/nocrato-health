@@ -33,7 +33,6 @@ Gerencia visão geral da agência: stats de doutores, pacientes, consultas.
 - Auth (login, refresh, forgot-password) → módulo `auth/`
 - Convites → módulo `invite/`
 - Lógica de tenant (portal do doutor) → futuro módulo `tenant/`
-- Lógica de tenant (portal do doutor) → futuro módulo `tenant/`
 
 ## Como rodar / testar isoladamente
 
