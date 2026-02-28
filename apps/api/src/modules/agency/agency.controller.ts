@@ -9,7 +9,7 @@ import { UpdateDoctorStatusSchema, UpdateDoctorStatusDto } from './dto/update-do
 import { ListMembersQuerySchema, ListMembersQueryDto } from './dto/list-members.dto'
 import { UpdateMemberStatusSchema, UpdateMemberStatusDto } from './dto/update-member-status.dto'
 
-@Controller('api/v1/agency')
+@Controller('agency')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('agency_admin', 'agency_member')
 export class AgencyController {

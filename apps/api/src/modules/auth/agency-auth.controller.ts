@@ -6,7 +6,7 @@ import { ResetPasswordSchema, type ResetPasswordDto } from './dto/reset-password
 import { RefreshTokenSchema, type RefreshTokenDto } from './dto/refresh-token.dto'
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 
-@Controller('api/v1/agency/auth')
+@Controller('agency/auth')
 export class AgencyAuthController {
   constructor(private readonly agencyAuthService: AgencyAuthService) {}
 

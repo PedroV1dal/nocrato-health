@@ -7,7 +7,7 @@ import { ResetPasswordSchema, type ResetPasswordDto } from './dto/reset-password
 import { RefreshTokenSchema, type RefreshTokenDto } from './dto/refresh-token.dto'
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 
-@Controller('api/v1/doctor/auth')
+@Controller('doctor/auth')
 export class DoctorAuthController {
   constructor(private readonly doctorAuthService: DoctorAuthService) {}
 

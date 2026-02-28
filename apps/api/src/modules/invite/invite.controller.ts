@@ -10,7 +10,7 @@ import { Roles } from '@/common/decorators/roles.decorator'
 import { CurrentUser } from '@/common/decorators/current-user.decorator'
 import type { JwtPayload } from '@/modules/auth/strategies/jwt.strategy'
 
-@Controller('api/v1')
+@Controller('')
 export class InviteController {
   constructor(private readonly inviteService: InviteService) {}
 
