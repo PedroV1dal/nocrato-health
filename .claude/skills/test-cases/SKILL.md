@@ -40,22 +40,40 @@ Para cada US, determinar quais categorias se aplicam:
 
 ### 3. Gerar os casos de teste
 
-Use o formato abaixo para cada caso. Numere sequencialmente como `CT-{epic}{us}-{NN}`:
+Use o formato BDD híbrido abaixo para cada caso. Numere sequencialmente como `CT-{epic}{us}-{NN}`:
 - US-2.3 → `CT-23-01`, `CT-23-02`...
 - US-3.1 → `CT-31-01`, `CT-31-02`...
+
+**Formato simples** (ação única ou fluxo linear curto):
 
 ```markdown
 ### CT-XX-NN — [descrição curta e objetiva]
 
 **Categoria:** Happy path | Isolamento | Acesso negado | Validação | Edge case | Segurança
-**Pré-condição:** [estado do sistema antes de executar]
 
-**Passos:**
+**Given** [estado inicial do sistema e dados de contexto]
+**When** [ação executada — verbo no imperativo]
+**Then** [comportamento observável esperado]
+
+**Resultado atual:** [ ] ok  [ ] falhou — [data se executado]
+```
+
+**Formato detalhado** (fluxos multi-step, wizards, lifecycles):
+
+```markdown
+### CT-XX-NN — [descrição curta e objetiva]
+
+**Categoria:** Happy path | Isolamento | Acesso negado | Validação | Edge case | Segurança
+
+**Given** [estado inicial do sistema]
+**When** [resumo da sequência de ações]
+**Then** [resultado final observável]
+
+**Passos detalhados:**
 1. [ação concreta — verbo no imperativo]
 2. [próxima ação]
 3. ...
 
-**Resultado esperado:** [o que deve acontecer — comportamento observável]
 **Resultado atual:** [ ] ok  [ ] falhou — [data se executado]
 ```
 
@@ -64,7 +82,7 @@ Use o formato abaixo para cada caso. Numere sequencialmente como `CT-{epic}{us}-
 - Mínimo 1 happy path por endpoint ou fluxo principal
 - Mínimo 1 CT de isolamento de tenant para toda US com tabela tenant-scoped
 - Máximo 8 CTs por US — priorizar risco sobre completude
-- Passos devem ser reproduzíveis por alguém sem conhecer o código
+- Given/When/Then devem ser compreensíveis sem conhecer o código
 - Usar dados realistas: nomes brasileiros, CRMs válidos, telefones no formato `(11) 99999-9999`
 - Nunca escrever CTs para o que os unit tests já cobrem exaustivamente (ex: validação de campos isolada)
 
@@ -117,12 +135,12 @@ Após registrar no doc, apresentar no chat:
 ### CT-XX-NN — Acesso sem token retorna 401
 
 **Categoria:** Acesso negado
-**Pré-condição:** nenhuma
 
-**Passos:**
-1. Fazer requisição para o endpoint sem header Authorization
+**Given** nenhum token de autenticação presente
+**When** requisição enviada para o endpoint sem header Authorization
+**Then** HTTP 401 Unauthorized
 
-**Resultado esperado:** HTTP 401 Unauthorized
+**Resultado atual:** [ ] ok  [ ] falhou
 ```
 
 ### Toda US com dados tenant-scoped
@@ -131,13 +149,12 @@ Após registrar no doc, apresentar no chat:
 ### CT-XX-NN — Usuário não acessa dados de outro tenant
 
 **Categoria:** Isolamento
-**Pré-condição:** dois tenants criados (ex: dr-silva, dra-carvalho), cada um com dados próprios
 
-**Passos:**
-1. Autenticar como dr-silva
-2. Tentar acessar o recurso com o slug de dra-carvalho
+**Given** dois tenants criados (ex: dr-silva, dra-carvalho), cada um com dados próprios
+**When** dr-silva autenticado tenta acessar o recurso com slug de dra-carvalho
+**Then** HTTP 403 Forbidden ou dados vazios (dependendo do guard configurado)
 
-**Resultado esperado:** HTTP 403 Forbidden ou dados vazios (dependendo do guard configurado)
+**Resultado atual:** [ ] ok  [ ] falhou
 ```
 
 ### Toda US com token temporário (booking, invite, reset)
@@ -146,22 +163,22 @@ Após registrar no doc, apresentar no chat:
 ### CT-XX-NN — Token expirado é rejeitado
 
 **Categoria:** Segurança
-**Pré-condição:** token com expires_at no passado
 
-**Passos:**
-1. Usar o token expirado na requisição
+**Given** token com `expires_at` no passado
+**When** token expirado é usado na requisição
+**Then** BadRequestException("Convite expirado") ou equivalente
 
-**Resultado esperado:** BadRequestException("Convite expirado") ou equivalente
+**Resultado atual:** [ ] ok  [ ] falhou
 
 ### CT-XX-NN — Token já utilizado não pode ser reutilizado
 
 **Categoria:** Segurança
-**Pré-condição:** token com status "accepted"
 
-**Passos:**
-1. Usar o token já aceito novamente
+**Given** token com status "accepted"
+**When** token já aceito é usado novamente
+**Then** BadRequestException("Este convite já foi utilizado") ou equivalente
 
-**Resultado esperado:** BadRequestException("Este convite já foi utilizado") ou equivalente
+**Resultado atual:** [ ] ok  [ ] falhou
 ```
 
 ---
@@ -174,9 +191,12 @@ Após registrar no doc, apresentar no chat:
 ### CT-31-01 — Happy path: doutor completa os 4 steps em sequência
 
 **Categoria:** Happy path
-**Pré-condição:** doutor com convite aceito, onboarding_completed = false, sem dados de perfil
 
-**Passos:**
+**Given** doutor com convite aceito, `onboarding_completed = false`, sem dados de perfil
+**When** os 4 steps são preenchidos em sequência e `complete` é chamado
+**Then** `onboarding_completed = true` no banco e status retorna `completed = true`
+
+**Passos detalhados:**
 1. GET /api/v1/doctor/onboarding/status → verificar currentStep = 1
 2. PATCH /api/v1/doctor/onboarding/profile { name: "Dr. Rafael Souza", crm: "SP-123456", crmState: "SP" }
 3. GET /api/v1/doctor/onboarding/status → verificar currentStep = 2
@@ -188,30 +208,26 @@ Após registrar no doc, apresentar no chat:
 9. POST /api/v1/doctor/onboarding/complete
 10. GET /api/v1/doctor/onboarding/status → verificar completed = true
 
-**Resultado esperado:** cada step avança corretamente, complete retorna 200 e onboarding_completed = true no banco
 **Resultado atual:** [ ] ok  [ ] falhou
 
 ### CT-31-02 — complete bloqueado com perfil incompleto
 
 **Categoria:** Edge case
-**Pré-condição:** doutor autenticado, name = null no banco
 
-**Passos:**
-1. POST /api/v1/doctor/onboarding/complete sem ter preenchido o perfil
+**Given** doutor autenticado com `name = null` no banco
+**When** POST /api/v1/doctor/onboarding/complete é chamado sem ter preenchido o perfil
+**Then** BadRequestException — onboarding não pode ser completado
 
-**Resultado esperado:** BadRequestException — onboarding não pode ser completado
 **Resultado atual:** [ ] ok  [ ] falhou
 
 ### CT-31-03 — doutor não acessa onboarding de outro tenant
 
 **Categoria:** Isolamento
-**Pré-condição:** dois doutores em tenants distintos (dr-silva, dra-carvalho)
 
-**Passos:**
-1. Autenticar como dr-silva (JWT com tenantId de dr-silva)
-2. PATCH /api/v1/doctor/onboarding/profile com o JWT de dr-silva — verificar que só atualiza o tenant de dr-silva
+**Given** dois doutores em tenants distintos (dr-silva, dra-carvalho)
+**When** dr-silva envia PATCH /api/v1/doctor/onboarding/profile com seu JWT
+**Then** apenas o tenant de dr-silva é atualizado — dados de dra-carvalho não são alterados
 
-**Resultado esperado:** dados de dra-carvalho não são alterados
 **Resultado atual:** [ ] ok  [ ] falhou
 ```
 
