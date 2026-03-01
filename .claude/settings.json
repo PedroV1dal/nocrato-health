@@ -72,7 +72,15 @@
       "Bash(pnpm --filter @nocrato/api test --forceExit)",
       "Bash(pnpm --filter @nocrato/api test -- --testPathPattern=onboarding --no-coverage)",
       "Bash(pnpm --filter @nocrato/api test -- --testPathPattern=\"modules/doctor\" --coverage --coverageReporters=text)",
-      "Bash(git add apps/api/src/modules/doctor/ apps/api/src/app.module.ts docs/roadmap/epic-3-onboarding.md .claude/settings.json)"
+      "Bash(git add apps/api/src/modules/doctor/ apps/api/src/app.module.ts docs/roadmap/epic-3-onboarding.md .claude/settings.json)",
+      "Bash(curl -s http://localhost:3000/api/v1/health)",
+      "Bash(PGPASSWORD=nocrato psql -h localhost -U nocrato -d nocrato_dev -t -c \"SELECT d.id, d.email, d.name, d.crm, d.working_hours IS NOT NULL as has_schedule, d.onboarding_completed, t.slug FROM doctors d JOIN tenants t ON t.id = d.tenant_id LIMIT 5;\")",
+      "Bash(PGPASSWORD=nocrato_secret psql -h localhost -U nocrato -d nocrato_health -t -c \"SELECT d.id, d.email, d.name, d.crm, d.working_hours IS NOT NULL as has_schedule, d.onboarding_completed, t.slug FROM doctors d JOIN tenants t ON t.id = d.tenant_id LIMIT 5;\")",
+      "Bash(node -e \"console.log\\(''Boolean\\(\\\\''{}\\\\''\\):'', Boolean\\(''{}''\\), ''| Boolean\\({}\\):'', Boolean\\({}\\), ''| Boolean\\(null\\):'', Boolean\\(null\\), ''| Object.keys\\({}\\).length > 0:'', Object.keys\\({}\\).length > 0\\)\")",
+      "Bash(pnpm --filter @nocrato/api build)",
+      "Bash(pnpm --filter @nocrato/api test:cov)",
+      "Bash(npx jest --coverage)",
+      "Bash(npx jest --verbose)"
     ],
     "additionalDirectories": [
       "/home/vidales/.claude/projects/-home-vidales-nocrato-health-v2",

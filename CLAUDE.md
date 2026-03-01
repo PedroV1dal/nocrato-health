@@ -27,6 +27,7 @@ O Claude DEVE invocar as skills abaixo (via Skill tool) automaticamente quando a
 | Resumo de Continuação | `/compact` | Contexto acima de 60-70% **ou** uma US acabou de ser concluída **ou** antes de iniciar uma US nova e complexa |
 | Definition of Done | `/definition-of-done` | Ao final de qualquer User Story, antes de propor o commit |
 | Health Check | `/health-check` | Após qualquer entrega de código (US, bugfix, refactor) — antes do commit |
+| Casos de Teste | `/test-cases` | Antes da etapa de QA de qualquer US com fluxo complexo, UI, token temporário ou dados tenant-scoped |
 
 **Regra:** se a condição for atendida e a skill não tiver sido invocada, o Claude está em violação do protocolo.
 
