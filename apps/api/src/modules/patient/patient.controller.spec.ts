@@ -1,8 +1,9 @@
 /**
- * US-4.1 — Controller spec: PatientController
+ * US-4.1 — Controller spec: PatientController (listPatients)
+ * US-4.2 — Controller spec: PatientController (getPatientProfile)
  *
  * Estratégia: testar que o handler delega ao service com os argumentos corretos
- * (tenantId, query dto). Os guards são desabilitados — são testados isoladamente.
+ * (tenantId, query dto / patientId). Os guards são desabilitados — são testados isoladamente.
  */
 
 // Mockar env ANTES de qualquer import que o carregue transitivamente.
@@ -22,7 +23,7 @@ jest.mock('@/config/env', () => ({
 }))
 
 import { Test, TestingModule } from '@nestjs/testing'
-import { ExecutionContext } from '@nestjs/common'
+import { ExecutionContext, NotFoundException } from '@nestjs/common'
 import { PatientController } from './patient.controller'
 import { PatientService } from './patient.service'
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard'
@@ -57,6 +58,31 @@ const makePaginatedResponse = (patients: ReturnType<typeof makePatient>[], total
 })
 
 // ---------------------------------------------------------------------------
+// Fixtures US-4.2
+// ---------------------------------------------------------------------------
+
+const PATIENT_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+
+const makePatientProfile = (overrides: Record<string, unknown> = {}) => ({
+  id: PATIENT_ID,
+  name: 'Maria Silva',
+  phone: '11999990000',
+  email: 'maria@example.com',
+  source: 'manual',
+  status: 'active',
+  portal_active: false,
+  created_at: new Date('2024-01-15T10:00:00Z'),
+  ...overrides,
+})
+
+const makeProfileResponse = () => ({
+  patient: makePatientProfile(),
+  appointments: [],
+  clinicalNotes: [],
+  documents: [],
+})
+
+// ---------------------------------------------------------------------------
 // Guard passthrough mock (desabilita guards nas specs de controller)
 // ---------------------------------------------------------------------------
 
@@ -75,6 +101,7 @@ describe('PatientController', () => {
   beforeEach(async () => {
     const mockService: jest.Mocked<Partial<PatientService>> = {
       listPatients: jest.fn(),
+      getPatientProfile: jest.fn(),
     }
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -143,6 +170,47 @@ describe('PatientController', () => {
 
       expect(result.data).toEqual([])
       expect(result.pagination.total).toBe(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // GET /doctor/patients/:id — US-4.2
+  // -------------------------------------------------------------------------
+
+  describe('getPatientProfile', () => {
+    it('should call getPatientProfile with tenantId from JWT and patientId from param', async () => {
+      const expected = makeProfileResponse()
+      service.getPatientProfile.mockResolvedValue(expected)
+
+      const result = await controller.getPatientProfile(TENANT_ID, PATIENT_ID)
+
+      expect(service.getPatientProfile).toHaveBeenCalledWith(TENANT_ID, PATIENT_ID)
+      expect(result).toEqual(expected)
+    })
+
+    it('should return the service result directly', async () => {
+      const expected = makeProfileResponse()
+      service.getPatientProfile.mockResolvedValue(expected)
+
+      const result = await controller.getPatientProfile(TENANT_ID, PATIENT_ID)
+
+      expect(result).toBe(expected)
+    })
+
+    it('should propagate NotFoundException when service throws it', async () => {
+      service.getPatientProfile.mockRejectedValue(new NotFoundException('Paciente não encontrado'))
+
+      await expect(
+        controller.getPatientProfile(TENANT_ID, PATIENT_ID),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('should propagate NotFoundException message when patient not found', async () => {
+      service.getPatientProfile.mockRejectedValue(new NotFoundException('Paciente não encontrado'))
+
+      await expect(
+        controller.getPatientProfile(TENANT_ID, PATIENT_ID),
+      ).rejects.toThrow('Paciente não encontrado')
     })
   })
 })

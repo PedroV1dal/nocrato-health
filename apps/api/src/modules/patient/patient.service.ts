@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, NotFoundException } from '@nestjs/common'
 import type { Knex } from 'knex'
 import { KNEX } from '@/database/knex.provider'
 import { ListPatientsQueryDto } from './dto/list-patients.dto'
@@ -11,6 +11,43 @@ const PUBLIC_PATIENT_FIELDS = [
   'email',
   'source',
   'status',
+  'created_at',
+] as const
+
+// Campos do perfil completo do paciente — inclui portal_active, exclui cpf e portal_access_code
+const PATIENT_PROFILE_FIELDS = [
+  'id',
+  'name',
+  'phone',
+  'email',
+  'source',
+  'status',
+  'portal_active',
+  'created_at',
+] as const
+
+const APPOINTMENT_FIELDS = [
+  'id',
+  'date_time',
+  'status',
+  'duration_minutes',
+  'started_at',
+  'completed_at',
+] as const
+
+const CLINICAL_NOTE_FIELDS = [
+  'id',
+  'appointment_id',
+  'content',
+  'created_at',
+] as const
+
+const DOCUMENT_FIELDS = [
+  'id',
+  'file_name',
+  'type',
+  'file_url',
+  'mime_type',
   'created_at',
 ] as const
 
@@ -60,6 +97,43 @@ export class PatientService {
         total,
         totalPages: Math.ceil(total / limit),
       },
+    }
+  }
+
+  // US-4.2: Perfil completo do paciente com appointments, notas clínicas e documentos
+  async getPatientProfile(tenantId: string, patientId: string) {
+    // Busca o paciente com isolamento de tenant obrigatório
+    const patient = await this.knex('patients')
+      .where({ id: patientId, tenant_id: tenantId })
+      .select(PATIENT_PROFILE_FIELDS)
+      .first()
+
+    // Se não encontrado ou pertence a outro tenant: 404 (não vazar existência)
+    if (!patient) {
+      throw new NotFoundException('Paciente não encontrado')
+    }
+
+    // Executa as 3 queries paralelas — todas scoped por tenant_id e patient_id
+    const [appointments, clinicalNotes, documents] = await Promise.all([
+      this.knex('appointments')
+        .where({ tenant_id: tenantId, patient_id: patientId })
+        .select(APPOINTMENT_FIELDS)
+        .orderBy('date_time', 'desc'),
+      this.knex('clinical_notes')
+        .where({ tenant_id: tenantId, patient_id: patientId })
+        .select(CLINICAL_NOTE_FIELDS)
+        .orderBy('created_at', 'desc'),
+      this.knex('documents')
+        .where({ tenant_id: tenantId, patient_id: patientId })
+        .select(DOCUMENT_FIELDS)
+        .orderBy('created_at', 'desc'),
+    ])
+
+    return {
+      patient,
+      appointments,
+      clinicalNotes,
+      documents,
     }
   }
 }

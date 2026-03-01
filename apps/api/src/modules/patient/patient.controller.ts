@@ -1,4 +1,5 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common'
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common'
+import { z } from 'zod'
 import { PatientService } from './patient.service'
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard'
 import { TenantGuard } from '@/common/guards/tenant.guard'
@@ -21,5 +22,14 @@ export class PatientController {
     @Query(new ZodValidationPipe(ListPatientsQuerySchema)) query: ListPatientsQueryDto,
   ) {
     return this.patientService.listPatients(tenantId, query)
+  }
+
+  // US-4.2: Perfil completo do paciente com appointments, notas clínicas e documentos
+  @Get(':id')
+  getPatientProfile(
+    @TenantId() tenantId: string,
+    @Param('id', new ZodValidationPipe(z.string().uuid())) patientId: string,
+  ) {
+    return this.patientService.getPatientProfile(tenantId, patientId)
   }
 }

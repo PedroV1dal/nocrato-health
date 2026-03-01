@@ -11,6 +11,7 @@ nunca são expostos nas respostas da API.
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | GET | `/api/v1/doctor/patients` | Listagem paginada com busca por nome/telefone e filtro por status |
+| GET | `/api/v1/doctor/patients/:id` | Perfil completo do paciente com appointments, notas clínicas e documentos |
 
 ## Arquivos principais
 
@@ -18,18 +19,28 @@ nunca são expostos nas respostas da API.
 |---------|-----------------|
 | `patient.module.ts` | Registra controller e service; não reimporta DatabaseModule (é `@Global()`) |
 | `patient.controller.ts` | Handlers HTTP; extrai tenantId do JWT via `@TenantId()` |
-| `patient.service.ts` | Queries Knex para listagem paginada e busca de pacientes |
+| `patient.service.ts` | Queries Knex para listagem paginada e perfil completo do paciente |
 | `dto/list-patients.dto.ts` | Zod schema para query params de listagem (page, limit, search, status) |
 | `patient.service.spec.ts` | Testes unitários do PatientService — mock manual do Knex |
 | `patient.controller.spec.ts` | Testes unitários do PatientController |
 
 ## Tabelas envolvidas
 
-- `patients` — todos os campos, scoped por `tenant_id`
+- `patients` — scoped por `tenant_id`
+- `appointments` — scoped por `tenant_id` e `patient_id` (US-4.2)
+- `clinical_notes` — scoped por `tenant_id` e `patient_id` (US-4.2)
+- `documents` — scoped por `tenant_id` e `patient_id` (US-4.2)
 
-## Campos públicos (expostos na listagem)
+## Campos públicos (expostos na listagem — US-4.1)
 
 `id`, `name`, `phone`, `email`, `source`, `status`, `created_at`
+
+## Campos públicos (expostos no perfil — US-4.2)
+
+**patient:** `id`, `name`, `phone`, `email`, `source`, `status`, `portal_active`, `created_at`
+**appointments:** `id`, `date_time`, `status`, `duration_minutes`, `started_at`, `completed_at`
+**clinical_notes:** `id`, `appointment_id`, `content`, `created_at`
+**documents:** `id`, `file_name`, `type`, `file_url`, `mime_type`, `created_at`
 
 ## Campos NUNCA expostos
 
@@ -43,7 +54,11 @@ nunca são expostos nas respostas da API.
 - **Busca full-text parcial**: `search` pesquisa em `name` e `phone` com ILIKE (case-insensitive).
 - **Filtro por status**: `status` pode ser `'active'` ou `'inactive'`. Se omitido, retorna todos.
 - **Paginação padrão**: page=1, limit=20 (máx 100). Parâmetros HTTP são strings — usar `z.coerce.number()`.
-- **Ordenação**: `created_at DESC` (mais recentes primeiro).
+- **Ordenação listagem**: `created_at DESC` (mais recentes primeiro).
+- **Perfil — patient não encontrado**: lança `NotFoundException` se o patient não existe OU pertence a outro tenant (não vazar existência).
+- **Perfil — queries paralelas**: appointments, clinical_notes e documents são buscados em `Promise.all` após confirmar que o patient existe.
+- **Perfil — ordenação**: appointments por `date_time DESC`; clinical_notes e documents por `created_at DESC`.
+- **clinical_notes**: visíveis ao doutor no perfil do paciente (diferente do portal do paciente, que não as expõe).
 
 ## Guards obrigatórios
 

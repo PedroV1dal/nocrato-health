@@ -22,12 +22,16 @@
 
 ---
 
-## US-4.2: Como doutor, quero ver o perfil completo de um paciente
+## US-4.2: Como doutor, quero ver o perfil completo de um paciente ✅
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] GET /api/v1/doctor/patients/:id → patient + appointments + notes + documents
-- [ ] **Criterio:** Retorna perfil completo com historico
+- [x] GET /api/v1/doctor/patients/:id → patient + appointments + notes + documents
+- [x] Retorna: `{ patient, appointments, clinicalNotes, documents }` com ordering por data DESC
+- [x] NotFoundException para patient inexistente ou de outro tenant (sem vazar existência)
+- [x] `cpf` e `portal_access_code` nunca selecionados; `portal_active` incluído
+- [x] 17 testes novos (305/305 suite completa), cobertura 100%
+- [x] **Criterio:** Retorna perfil completo com historico
 
 ---
 
