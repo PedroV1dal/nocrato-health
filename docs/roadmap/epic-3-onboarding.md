@@ -10,17 +10,25 @@
 
 ---
 
-## US-3.1: Como doutor recem-convidado, quero completar meu onboarding
+## US-3.1: Como doutor recem-convidado, quero completar meu onboarding ✅
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] GET /api/v1/doctor/onboarding/status → { currentStep, completed }
-- [ ] PATCH /api/v1/doctor/onboarding/profile { name, specialty, phone, CRM, crmState }
-- [ ] PATCH /api/v1/doctor/onboarding/schedule { workingHours, timezone, appointmentDuration }
-- [ ] PATCH /api/v1/doctor/onboarding/branding { primaryColor, logoUrl }
-- [ ] PATCH /api/v1/doctor/onboarding/agent { welcomeMessage, personality, faq }
-- [ ] POST /api/v1/doctor/onboarding/complete → marca onboarding_completed = true
-- [ ] **Criterio:** 4 steps, cada um salva dados, ultimo ativa o portal
+- [x] GET /api/v1/doctor/onboarding/status → { currentStep, completed, steps }
+- [x] PATCH /api/v1/doctor/onboarding/profile { name, specialty, phone, CRM, crmState }
+- [x] PATCH /api/v1/doctor/onboarding/schedule { workingHours, timezone, appointmentDuration }
+- [x] PATCH /api/v1/doctor/onboarding/branding { primaryColor, logoUrl }
+- [x] PATCH /api/v1/doctor/onboarding/agent { welcomeMessage, personality, faq }
+- [x] POST /api/v1/doctor/onboarding/complete → marca onboarding_completed = true
+- [x] **Criterio:** 4 steps, cada um salva dados, ultimo ativa o portal
+
+**Implementado em:** `apps/api/src/modules/doctor/`
+**Testes:** 31 testes (26 service + 6 controller) | Cobertura: 93-97% | Suite total: 258/258
+**Notas de implementação:**
+- `getOnboardingStatus` retorna `{ currentStep: 1-5, completed: bool, steps: { profile, schedule, branding, agent } }`
+- `updateBranding` atualiza tabela `tenants` (primary_color, logo_url), não `doctors`
+- `updateAgentSettings` faz upsert com default `booking_mode: 'both'` (valor válido do CHECK constraint)
+- `completeOnboarding` valida `name`, `crm` e `working_hours` antes de marcar como completo
 
 ---
 

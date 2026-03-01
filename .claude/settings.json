@@ -69,11 +69,15 @@
       "mcp__playwright__browser_fill_form",
       "mcp__playwright__browser_snapshot",
       "Bash(npx playwright test --reporter=list)",
-      "Bash(pnpm --filter @nocrato/api test --forceExit)"
+      "Bash(pnpm --filter @nocrato/api test --forceExit)",
+      "Bash(pnpm --filter @nocrato/api test -- --testPathPattern=onboarding --no-coverage)",
+      "Bash(pnpm --filter @nocrato/api test -- --testPathPattern=\"modules/doctor\" --coverage --coverageReporters=text)",
+      "Bash(git add apps/api/src/modules/doctor/ apps/api/src/app.module.ts docs/roadmap/epic-3-onboarding.md .claude/settings.json)"
     ],
     "additionalDirectories": [
       "/home/vidales/.claude/projects/-home-vidales-nocrato-health-v2",
-      "/home/vidales/nocrato-health-v2/apps/web"
+      "/home/vidales/nocrato-health-v2/apps/web",
+      "/home/vidales/nocrato-health-v2/apps/api/src/modules/doctor"
     ]
   }
 }
