@@ -11,9 +11,13 @@ consulta segue: `scheduled → waiting → in_progress → completed` (com deriv
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
+| GET | `/api/v1/doctor/dashboard` | Dashboard: consultas de hoje + total pacientes + pendingFollowUps |
 | GET | `/api/v1/doctor/appointments` | Listagem paginada com filtros por status, data e paciente |
 | POST | `/api/v1/doctor/appointments` | Cria consulta manualmente com verificação de conflito de horário |
+| GET | `/api/v1/doctor/appointments/:id` | Detalhe da consulta: appointment + patient + clinical_notes |
 | PATCH | `/api/v1/doctor/appointments/:id/status` | Altera status seguindo máquina de estados; registra actor_id |
+
+**Atenção — ordem obrigatória no controller:** `@Get('dashboard')` → `@Get(':id')` → `@Patch(':id/status')` para evitar conflito de rota NestJS.
 
 ## Arquivos principais
 
@@ -21,16 +25,21 @@ consulta segue: `scheduled → waiting → in_progress → completed` (com deriv
 |---------|-----------------|
 | `appointment.module.ts` | Registra controller e service; não reimporta DatabaseModule (é `@Global()`) |
 | `appointment.controller.ts` | Handlers HTTP; extrai tenantId via `@TenantId()`, actorId via `@CurrentUser().sub` |
-| `appointment.service.ts` | Queries Knex: listagem, criação, máquina de estados |
-| `dto/list-appointments.dto.ts` | Zod schema para query params de listagem (page, limit, status, date, patientId) |
+| `appointment.service.ts` | Queries Knex: dashboard, listagem, criação, detalhe, máquina de estados |
+| `dto/list-appointments.dto.ts` | Zod schema para query params de listagem (page, limit, status, date, patientId); exporta `AppointmentStatusEnum` |
 | `dto/create-appointment.dto.ts` | Zod schema para body de criação (patientId, dateTime, durationMinutes?) |
 | `dto/update-appointment-status.dto.ts` | Zod discriminatedUnion por status alvo; campos obrigatórios por transição |
+| `dto/get-dashboard.dto.ts` | Zod schema do response do dashboard (documentação — não aplicado como pipe) |
 | `appointment.service.spec.ts` | Testes unitários do AppointmentService — mock manual do Knex |
 | `appointment.controller.spec.ts` | Testes unitários do AppointmentController + validação do DTO |
 
 ## Tabelas envolvidas
 
 - `appointments` — scoped por `tenant_id`
+- `patients` — lido em criação (validação), detalhe (dados do paciente) e dashboard (count ativos)
+- `clinical_notes` — lido em detalhe (array de notas) e dashboard (LEFT JOIN para pendingFollowUps)
+- `doctors` — lido em criação (appointment_duration padrão)
+- `event_log` — escrita em criação, mudança de status e portal activation
 
 ## Campos retornados na listagem (US-5.1)
 
@@ -81,6 +90,26 @@ consulta segue: `scheduled → waiting → in_progress → completed` (com deriv
 - **Evento de audit trail**: INSERT em `event_log` com `event_type='appointment.created'`, `actor_type='doctor'`, `payload: { appointment_id, patient_id, date_time, created_by }` — feito dentro da mesma transação. Colunas corretas: `actor_type` (não `actor`); sem `entity_type`/`entity_id` (não existem no schema).
 - **Retorna 201** com os campos: `id`, `tenant_id`, `patient_id`, `date_time`, `duration_minutes`, `status`, `created_by`, `created_at`.
 
+### Detalhe de consulta (US-5.4)
+
+- **Endpoint:** `GET /api/v1/doctor/appointments/:id`
+- **Busca:** `appointments WHERE { id, tenant_id }` → 404 `'Consulta não encontrada'` se null
+- **Paralelo:** `Promise.all([patient query, clinical_notes query])`
+- **Patient:** campos `APPOINTMENT_DETAIL_PATIENT_FIELDS` (exclui `cpf` e `portal_access_code`)
+- **Paciente deletado:** `patient = undefined` não lança 404 — retorna `patient: undefined` (comportamento MVP)
+- **Response:** `{ appointment, patient, clinicalNotes }`
+- **OBS-TL-1 (baixo risco MVP):** `APPOINTMENT_LIST_FIELDS` reutilizado no detalhe — acoplamento implícito aceitável
+
+### Dashboard (US-5.5)
+
+- **Endpoint:** `GET /api/v1/doctor/dashboard`
+- **Response:** `{ todayAppointments: Appointment[], totalPatients: number, pendingFollowUps: number }`
+- **Paralelo:** `Promise.all` para as 3 queries
+- **`todayAppointments`:** `appointments WHERE tenant_id AND date_time BETWEEN [T00:00:00.000Z, T23:59:59.999Z]` ORDER BY `date_time ASC` — usa `APPOINTMENT_LIST_FIELDS`
+- **`totalPatients`:** `COUNT patients WHERE { tenant_id, status: 'active' }` — converter com `Number()`
+- **`pendingFollowUps`:** `COUNT appointments as a LEFT JOIN clinical_notes as cn ON cn.appointment_id = a.id WHERE { a.tenant_id, a.status: 'completed' } AND cn.id IS NULL` — contar por CONSULTA (não por paciente), converter com `Number()`
+- **Knex count retorna string do PostgreSQL:** sempre usar `Number(result?.count ?? 0)`
+
 ## Guards obrigatórios
 
 Todos os endpoints deste módulo requerem:
@@ -98,7 +127,7 @@ Todos os endpoints deste módulo requerem:
 - Documentos → `modules/document/`
 - Booking público (geração de tokens) → `modules/booking/`
 - Agendamento via WhatsApp → `modules/agent/`
-- Cron de auto-transição `scheduled → waiting` → `appointment.auto-transition.service.ts` (US-5.3 decidiu deixar para US-5.5)
+- Cron de auto-transição `scheduled → waiting` → ficou fora do MVP de US-5.5; a implementar em US futura se necessário
 
 ## Como rodar / testar isoladamente
 

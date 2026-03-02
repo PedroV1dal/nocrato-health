@@ -37,6 +37,13 @@ export class AppointmentController {
     return this.appointmentService.createAppointment(tenantId, dto)
   }
 
+  // US-5.5: Dashboard do doutor — consultas de hoje, total de pacientes ativos e follow-ups pendentes
+  // IMPORTANTE: @Get('dashboard') deve estar ANTES de @Get(':id') para não ser capturado como parâmetro
+  @Get('dashboard')
+  getDoctorDashboard(@TenantId() tenantId: string) {
+    return this.appointmentService.getDoctorDashboard(tenantId)
+  }
+
   // US-5.4: Detalhe completo de uma consulta (dados + paciente + notas clínicas)
   // IMPORTANTE: @Get(':id') deve estar ANTES de @Patch(':id/status') para evitar conflito de rota
   @Get(':id')

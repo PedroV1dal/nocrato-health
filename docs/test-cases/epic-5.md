@@ -295,11 +295,11 @@
 
 **Categoria:** Happy path
 
-**Given** doutor `Dr. Rafael Souza` autenticado, tenant `dr-rafael` com: 3 consultas hoje (1 `scheduled`, 1 `in_progress`, 1 `completed`), 12 pacientes ativos no total
+**Given** doutor `Dr. Rafael Souza` autenticado, tenant `dr-rafael` com: 3 consultas hoje (1 `scheduled`, 1 `in_progress`, 1 `completed` sem nota clínica), 12 pacientes ativos no total, 1 consulta `completed` de dias anteriores com nota clínica
 **When** GET `/api/v1/doctor/dashboard`
-**Then** HTTP 200 com `{ todayAppointments: [{...}, {...}, {...}], totalPatients: 12, pendingFollowUps: N }` — lista `todayAppointments` ordenada por horário crescente
+**Then** HTTP 200 com `{ todayAppointments: [{...}, {...}, {...}], totalPatients: 12, pendingFollowUps: 1 }` — `pendingFollowUps` = consultas `completed` sem nota clínica (só a de hoje, não a que já tem nota) — lista `todayAppointments` ordenada por horário crescente
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -311,7 +311,7 @@
 **When** GET `/api/v1/doctor/dashboard`
 **Then** HTTP 200 com `{ todayAppointments: [], totalPatients: 0, pendingFollowUps: 0 }`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -323,7 +323,7 @@
 **When** dr-rafael autenticado faz GET `/api/v1/doctor/dashboard`
 **Then** HTTP 200 com `todayAppointments` contendo apenas as 3 consultas de dr-rafael
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 

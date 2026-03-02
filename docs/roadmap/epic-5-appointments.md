@@ -64,12 +64,17 @@
 
 ---
 
-## US-5.5: Como doutor, quero ver meu dashboard com consultas de hoje
+## ✅ US-5.5: Como doutor, quero ver meu dashboard com consultas de hoje
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] GET /api/v1/doctor/dashboard → { todayAppointments, totalPatients, pendingFollowUps }
-- [ ] **Criterio:** Stats corretos
+- [x] GET /api/v1/doctor/dashboard → { todayAppointments, totalPatients, pendingFollowUps }
+- [x] `todayAppointments`: consultas do dia atual (UTC) ordenadas por `date_time` ASC — campos de `APPOINTMENT_LIST_FIELDS`
+- [x] `totalPatients`: COUNT de pacientes com `status = 'active'` no tenant
+- [x] `pendingFollowUps`: COUNT de consultas com `status = 'completed'` que NÃO possuem nenhuma nota clínica (`clinical_notes.appointment_id` NULL via LEFT JOIN)
+- [x] Todas as queries com `tenant_id` do JWT (isolamento de tenant)
+- [x] Execução em `Promise.all` (paralelo)
+- [x] **Criterio:** Stats corretos do dia, pendingFollowUps = número de consultas completed sem nota
 
 ---
 

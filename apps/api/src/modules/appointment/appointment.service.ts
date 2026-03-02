@@ -101,6 +101,50 @@ export class AppointmentService {
     }
   }
 
+  // US-5.5: Dashboard do doutor — consultas de hoje, total de pacientes ativos e follow-ups pendentes
+  async getDoctorDashboard(tenantId: string) {
+    // Range UTC do dia corrente para filtrar consultas de hoje
+    const today = new Date()
+    const datePrefix = today.toISOString().split('T')[0]
+    const startOfDay = `${datePrefix}T00:00:00.000Z`
+    const endOfDay = `${datePrefix}T23:59:59.999Z`
+
+    // Executa as 3 queries em paralelo para eficiência máxima
+    const [todayAppointments, totalPatientsResult, pendingFollowUpsResult] = await Promise.all([
+      // 1. Consultas do dia atual, ordenadas por horário crescente
+      this.knex('appointments')
+        .where({ tenant_id: tenantId })
+        .andWhereBetween('date_time', [startOfDay, endOfDay])
+        .select(APPOINTMENT_LIST_FIELDS)
+        .orderBy('date_time', 'asc'),
+
+      // 2. Total de pacientes ativos no tenant
+      this.knex('patients')
+        .where({ tenant_id: tenantId, status: 'active' })
+        .count('id as count')
+        .first(),
+
+      // 3. Consultas completadas sem nenhuma nota clínica (follow-ups pendentes)
+      // LEFT JOIN clinical_notes — WHERE cn.id IS NULL filtra as que não têm nota
+      this.knex('appointments as a')
+        .leftJoin('clinical_notes as cn', 'cn.appointment_id', 'a.id')
+        .where({ 'a.tenant_id': tenantId, 'a.status': 'completed' })
+        .whereNull('cn.id')
+        .count('a.id as count')
+        .first(),
+    ])
+
+    // Knex.count() retorna string do PostgreSQL — converter com Number()
+    const totalPatients = Number(totalPatientsResult?.count ?? 0)
+    const pendingFollowUps = Number(pendingFollowUpsResult?.count ?? 0)
+
+    return {
+      todayAppointments,
+      totalPatients,
+      pendingFollowUps,
+    }
+  }
+
   // US-5.4: Detalhe completo de uma consulta com dados do paciente e notas clínicas
   async getAppointmentDetail(tenantId: string, appointmentId: string) {
     // 1. Buscar a consulta com isolamento de tenant obrigatório — agent_summary excluído

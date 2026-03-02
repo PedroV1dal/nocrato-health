@@ -1462,3 +1462,295 @@ describe('AppointmentService — getAppointmentDetail', () => {
     expect(result.patient).toBeDefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Suite: getDoctorDashboard (US-5.5)
+// ---------------------------------------------------------------------------
+
+describe('AppointmentService — getDoctorDashboard', () => {
+  let service: AppointmentService
+  let mockKnex: jest.Mock
+
+  const TENANT_ID = 'tenant-uuid-1'
+  const PATIENT_ID = 'patient-uuid-1'
+  const APPOINTMENT_ID = 'appt-uuid-1'
+
+  const makeAppointment = (overrides: Record<string, unknown> = {}) => ({
+    id: APPOINTMENT_ID,
+    tenant_id: TENANT_ID,
+    patient_id: PATIENT_ID,
+    date_time: new Date(),
+    duration_minutes: 30,
+    status: 'scheduled',
+    cancellation_reason: null,
+    rescheduled_to_id: null,
+    created_by: 'doctor',
+    started_at: null,
+    completed_at: null,
+    created_at: new Date('2026-03-01T09:00:00Z'),
+    ...overrides,
+  })
+
+  /**
+   * Cria mock do Knex com roteamento por tabela para getDoctorDashboard.
+   *
+   * O service executa 3 queries em paralelo (Promise.all):
+   *  1. appointments (today) → .where().andWhereBetween().select().orderBy() → array
+   *  2. patients → .where().count().first() → { count: string }
+   *  3. appointments as a + LEFT JOIN clinical_notes → .leftJoin().where().whereNull().count().first() → { count: string }
+   *
+   * Estratégia de roteamento:
+   *  - 1ª chamada a 'appointments' (ou 'appointments as a') → todayAppointments builder
+   *  - 'patients' → patientsCountBuilder
+   *  - 'appointments as a' → pendingFollowUpsBuilder (com leftJoin)
+   *
+   * Como o Knex usa string literal exata ao chamar knex('appointments as a'),
+   * roteamos por callCount na função principal.
+   */
+  const createMockKnex = (opts: {
+    todayAppointments?: Record<string, unknown>[]
+    totalPatients?: string
+    pendingFollowUps?: string
+  }) => {
+    const {
+      todayAppointments = [makeAppointment()],
+      totalPatients = '12',
+      pendingFollowUps = '1',
+    } = opts
+
+    // Builder para consultas de hoje: .where().andWhereBetween().select().orderBy()
+    const todayBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhereBetween: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockResolvedValue(todayAppointments),
+    }
+
+    // Builder para count de pacientes ativos: .where().count().first()
+    const patientsCountBuilder = {
+      where: jest.fn().mockReturnThis(),
+      count: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue({ count: totalPatients }),
+    }
+
+    // Builder para pendingFollowUps com LEFT JOIN: .leftJoin().where().whereNull().count().first()
+    const pendingBuilder = {
+      leftJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      whereNull: jest.fn().mockReturnThis(),
+      count: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue({ count: pendingFollowUps }),
+    }
+
+    // Roteamento: 'appointments' → todayBuilder, 'appointments as a' → pendingBuilder, 'patients' → patientsCountBuilder
+    const knex = jest.fn().mockImplementation((table: string) => {
+      if (table === 'appointments') return todayBuilder
+      if (table === 'patients') return patientsCountBuilder
+      if (table === 'appointments as a') return pendingBuilder
+      throw new Error(`Tabela inesperada no mock: ${table}`)
+    })
+
+    return { knex, todayBuilder, patientsCountBuilder, pendingBuilder }
+  }
+
+  beforeEach(async () => {
+    mockKnex = jest.fn()
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        AppointmentService,
+        { provide: KNEX, useValue: mockKnex },
+      ],
+    }).compile()
+
+    service = moduleRef.get<AppointmentService>(AppointmentService)
+  })
+
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-55-01: Happy path — retorna dados completos do dashboard
+  // -------------------------------------------------------------------------
+
+  it('CT-55-01: should return todayAppointments, totalPatients and pendingFollowUps', async () => {
+    const appts = [makeAppointment(), makeAppointment({ id: 'appt-2' }), makeAppointment({ id: 'appt-3' })]
+    const { knex } = createMockKnex({
+      todayAppointments: appts,
+      totalPatients: '12',
+      pendingFollowUps: '1',
+    })
+    mockKnex.mockImplementation(knex)
+
+    const result = await service.getDoctorDashboard(TENANT_ID)
+
+    expect(result).toEqual({
+      todayAppointments: appts,
+      totalPatients: 12,
+      pendingFollowUps: 1,
+    })
+  })
+
+  it('CT-55-01b: should return todayAppointments ordered by date_time asc', async () => {
+    const { knex, todayBuilder } = createMockKnex({ todayAppointments: [makeAppointment()] })
+    mockKnex.mockImplementation(knex)
+
+    await service.getDoctorDashboard(TENANT_ID)
+
+    expect(todayBuilder.orderBy).toHaveBeenCalledWith('date_time', 'asc')
+  })
+
+  it('CT-55-01c: should filter todayAppointments using BETWEEN start and end of today UTC', async () => {
+    const { knex, todayBuilder } = createMockKnex({})
+    mockKnex.mockImplementation(knex)
+
+    await service.getDoctorDashboard(TENANT_ID)
+
+    const [[rangeField, rangeValues]] = todayBuilder.andWhereBetween.mock.calls
+    expect(rangeField).toBe('date_time')
+    expect(rangeValues).toHaveLength(2)
+    // Ambos os extremos devem ser strings ISO com a data de hoje
+    const today = new Date().toISOString().split('T')[0]
+    expect(rangeValues[0]).toBe(`${today}T00:00:00.000Z`)
+    expect(rangeValues[1]).toBe(`${today}T23:59:59.999Z`)
+  })
+
+  it('CT-55-01d: should count patients with status=active', async () => {
+    const { knex, patientsCountBuilder } = createMockKnex({})
+    mockKnex.mockImplementation(knex)
+
+    await service.getDoctorDashboard(TENANT_ID)
+
+    expect(patientsCountBuilder.where).toHaveBeenCalledWith({
+      tenant_id: TENANT_ID,
+      status: 'active',
+    })
+    expect(patientsCountBuilder.count).toHaveBeenCalledWith('id as count')
+  })
+
+  it('CT-55-01e: should perform LEFT JOIN clinical_notes to find pending follow-ups', async () => {
+    const { knex, pendingBuilder } = createMockKnex({})
+    mockKnex.mockImplementation(knex)
+
+    await service.getDoctorDashboard(TENANT_ID)
+
+    expect(pendingBuilder.leftJoin).toHaveBeenCalledWith(
+      'clinical_notes as cn',
+      'cn.appointment_id',
+      'a.id',
+    )
+    expect(pendingBuilder.where).toHaveBeenCalledWith({
+      'a.tenant_id': TENANT_ID,
+      'a.status': 'completed',
+    })
+    expect(pendingBuilder.whereNull).toHaveBeenCalledWith('cn.id')
+  })
+
+  it('CT-55-01f: should convert count strings to numbers (PostgreSQL returns strings)', async () => {
+    const { knex } = createMockKnex({ totalPatients: '42', pendingFollowUps: '7' })
+    mockKnex.mockImplementation(knex)
+
+    const result = await service.getDoctorDashboard(TENANT_ID)
+
+    expect(typeof result.totalPatients).toBe('number')
+    expect(typeof result.pendingFollowUps).toBe('number')
+    expect(result.totalPatients).toBe(42)
+    expect(result.pendingFollowUps).toBe(7)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-55-02: Sem dados — retorna estrutura com zeros e lista vazia
+  // -------------------------------------------------------------------------
+
+  it('CT-55-02: should return empty todayAppointments and zeros when no data exists', async () => {
+    const { knex } = createMockKnex({
+      todayAppointments: [],
+      totalPatients: '0',
+      pendingFollowUps: '0',
+    })
+    mockKnex.mockImplementation(knex)
+
+    const result = await service.getDoctorDashboard(TENANT_ID)
+
+    expect(result).toEqual({
+      todayAppointments: [],
+      totalPatients: 0,
+      pendingFollowUps: 0,
+    })
+  })
+
+  it('CT-55-02b: should handle null count results gracefully (fallback to 0)', async () => {
+    const { knex, patientsCountBuilder, pendingBuilder } = createMockKnex({})
+    // Sobrescrever first() para retornar null (ausência de resultado)
+    patientsCountBuilder.first.mockResolvedValue(null)
+    pendingBuilder.first.mockResolvedValue(null)
+    mockKnex.mockImplementation(knex)
+
+    const result = await service.getDoctorDashboard(TENANT_ID)
+
+    expect(result.totalPatients).toBe(0)
+    expect(result.pendingFollowUps).toBe(0)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-55-03: Isolamento de tenant — queries sempre com tenant_id correto
+  // -------------------------------------------------------------------------
+
+  it('CT-55-03: should scope todayAppointments query to the authenticated tenant', async () => {
+    const OTHER_TENANT = 'other-tenant-uuid'
+    const { knex, todayBuilder } = createMockKnex({})
+    mockKnex.mockImplementation(knex)
+
+    await service.getDoctorDashboard(OTHER_TENANT)
+
+    expect(todayBuilder.where).toHaveBeenCalledWith({ tenant_id: OTHER_TENANT })
+  })
+
+  it('CT-55-03b: should scope patients count query to the authenticated tenant', async () => {
+    const OTHER_TENANT = 'other-tenant-uuid'
+    const { knex, patientsCountBuilder } = createMockKnex({})
+    mockKnex.mockImplementation(knex)
+
+    await service.getDoctorDashboard(OTHER_TENANT)
+
+    expect(patientsCountBuilder.where).toHaveBeenCalledWith({
+      tenant_id: OTHER_TENANT,
+      status: 'active',
+    })
+  })
+
+  it('CT-55-03c: should scope pendingFollowUps query to the authenticated tenant', async () => {
+    const OTHER_TENANT = 'other-tenant-uuid'
+    const { knex, pendingBuilder } = createMockKnex({})
+    mockKnex.mockImplementation(knex)
+
+    await service.getDoctorDashboard(OTHER_TENANT)
+
+    expect(pendingBuilder.where).toHaveBeenCalledWith({
+      'a.tenant_id': OTHER_TENANT,
+      'a.status': 'completed',
+    })
+  })
+
+  it('CT-55-03d: should never mix tenant data — tenant_id is always from JWT, never body', async () => {
+    const TENANT_A = 'tenant-a-uuid'
+    const TENANT_B = 'tenant-b-uuid'
+    const { knex: knexA, todayBuilder: builderA } = createMockKnex({ todayAppointments: [makeAppointment()] })
+    const { knex: knexB, todayBuilder: builderB } = createMockKnex({ todayAppointments: [] })
+
+    // Chamada para tenant A
+    mockKnex.mockImplementation(knexA)
+    await service.getDoctorDashboard(TENANT_A)
+    expect(builderA.where).toHaveBeenCalledWith({ tenant_id: TENANT_A })
+    expect(builderA.where).not.toHaveBeenCalledWith({ tenant_id: TENANT_B })
+
+    jest.clearAllMocks()
+
+    // Chamada para tenant B
+    mockKnex.mockImplementation(knexB)
+    await service.getDoctorDashboard(TENANT_B)
+    expect(builderB.where).toHaveBeenCalledWith({ tenant_id: TENANT_B })
+    expect(builderB.where).not.toHaveBeenCalledWith({ tenant_id: TENANT_A })
+  })
+})
