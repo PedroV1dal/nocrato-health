@@ -9,9 +9,9 @@ const labels: Record<Status, string> = {
 }
 
 const styles: Record<Status, string> = {
-  active: 'bg-green-100 text-green-700',
-  inactive: 'bg-gray-100 text-gray-600',
-  pending: 'bg-amber-100 text-amber-700',
+  active: 'bg-amber-dark/10 text-amber-dark',
+  inactive: 'bg-gray-100 text-gray-500',
+  pending: 'bg-amber-bright/20 text-amber-dark',
 }
 
 interface StatusBadgeProps {

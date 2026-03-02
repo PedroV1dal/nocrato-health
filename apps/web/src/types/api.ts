@@ -141,3 +141,47 @@ export interface CompleteOnboardingResponse {
     slug: string
   }
 }
+
+// US-4.5 — Patient portal
+
+export interface PatientListItem {
+  id: string
+  name: string
+  phone: string
+  email?: string
+  source: 'manual' | 'agent'
+  status: 'active' | 'inactive'
+  created_at: string
+}
+
+export interface PatientAppointment {
+  id: string
+  date_time: string
+  status: 'scheduled' | 'waiting' | 'in_progress' | 'completed' | 'cancelled' | 'no_show'
+  duration_minutes: number
+  started_at?: string
+  completed_at?: string
+}
+
+export interface PatientClinicalNote {
+  id: string
+  appointment_id?: string
+  content: string
+  created_at: string
+}
+
+export interface PatientDocument {
+  id: string
+  file_name: string
+  type: string
+  file_url: string
+  mime_type: string
+  created_at: string
+}
+
+export interface PatientProfile {
+  patient: PatientListItem & { portal_active: boolean }
+  appointments: PatientAppointment[]
+  clinicalNotes: PatientClinicalNote[]
+  documents: PatientDocument[]
+}

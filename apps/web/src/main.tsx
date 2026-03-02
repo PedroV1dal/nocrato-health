@@ -17,6 +17,8 @@ import { DoctorResetPasswordPage } from './routes/doctor/reset-password'
 import { DoctorLayout } from './routes/doctor/_layout'
 import { DoctorOnboardingPage } from './routes/doctor/onboarding'
 import { DoctorDashboardPage } from './routes/doctor/dashboard'
+import { DoctorPatientsPage } from './routes/doctor/patients/index'
+import { DoctorPatientProfilePage } from './routes/doctor/patients/$patientId'
 import './app.css'
 
 // ─── Rotas públicas ──────────────────────────────────────────────────────────
@@ -139,6 +141,18 @@ const doctorDashboardRoute = createRoute({
   component: DoctorDashboardPage,
 })
 
+const doctorPatientsRoute = createRoute({
+  getParentRoute: () => doctorLayoutRoute,
+  path: '/doctor/patients',
+  component: DoctorPatientsPage,
+})
+
+const doctorPatientProfileRoute = createRoute({
+  getParentRoute: () => doctorLayoutRoute,
+  path: '/doctor/patients/$patientId',
+  component: DoctorPatientProfilePage,
+})
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -157,6 +171,8 @@ const routeTree = rootRoute.addChildren([
   doctorOnboardingRoute,
   doctorLayoutRoute.addChildren([
     doctorDashboardRoute,
+    doctorPatientsRoute,
+    doctorPatientProfileRoute,
   ]),
 ])
 
