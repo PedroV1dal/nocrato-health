@@ -1,13 +1,16 @@
-import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { AppointmentService } from './appointment.service'
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard'
 import { TenantGuard } from '@/common/guards/tenant.guard'
 import { RolesGuard } from '@/common/guards/roles.guard'
 import { Roles } from '@/common/decorators/roles.decorator'
 import { TenantId } from '@/common/decorators/tenant.decorator'
+import { CurrentUser } from '@/common/decorators/current-user.decorator'
+import type { JwtPayload } from '@/modules/auth/strategies/jwt.strategy'
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 import { ListAppointmentsQuerySchema, ListAppointmentsDto } from './dto/list-appointments.dto'
 import { CreateAppointmentSchema, CreateAppointmentDto } from './dto/create-appointment.dto'
+import { UpdateAppointmentStatusSchema, UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto'
 
 @Controller('doctor/appointments')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -32,5 +35,16 @@ export class AppointmentController {
     @Body(new ZodValidationPipe(CreateAppointmentSchema)) dto: CreateAppointmentDto,
   ) {
     return this.appointmentService.createAppointment(tenantId, dto)
+  }
+
+  // US-5.3: Alterar status de consulta seguindo a máquina de estados
+  @Patch(':id/status')
+  updateAppointmentStatus(
+    @TenantId() tenantId: string,
+    @Param('id') appointmentId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body(new ZodValidationPipe(UpdateAppointmentStatusSchema)) dto: UpdateAppointmentStatusDto,
+  ) {
+    return this.appointmentService.updateAppointmentStatus(tenantId, appointmentId, dto, user.sub)
   }
 }

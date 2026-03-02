@@ -33,22 +33,22 @@
 
 ---
 
-## US-5.3: Como doutor, quero alterar o status de uma consulta
+## ✅ US-5.3: Como doutor, quero alterar o status de uma consulta
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] PATCH /api/v1/doctor/appointments/:id/status { status }
-- [ ] Transicoes validas:
+- [x] PATCH /api/v1/doctor/appointments/:id/status { status }
+- [x] Transicoes validas:
   - scheduled → waiting (auto ou manual)
   - waiting → in_progress (doutor inicia)
   - in_progress → completed (doutor finaliza)
   - scheduled|waiting → cancelled (com motivo)
   - scheduled|waiting → no_show
   - scheduled → rescheduled (cria nova consulta)
-- [ ] started_at e completed_at preenchidos automaticamente
-- [ ] Se completed: gera portal_access_code pro paciente (se primeiro atendimento)
-- [ ] Emite evento no event_log
-- [ ] **Criterio:** Todas transicoes validas funcionam, invalidas retornam 400
+- [x] started_at e completed_at preenchidos automaticamente
+- [x] Se completed: gera portal_access_code pro paciente (se primeiro atendimento)
+- [x] Emite evento no event_log
+- [x] **Criterio:** Todas transicoes validas funcionam, invalidas retornam 400
 
 ---
 

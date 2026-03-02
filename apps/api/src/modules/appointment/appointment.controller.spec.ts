@@ -88,6 +88,7 @@ describe('AppointmentController', () => {
     const mockService: jest.Mocked<Partial<AppointmentService>> = {
       listAppointments: jest.fn(),
       createAppointment: jest.fn(),
+      updateAppointmentStatus: jest.fn(),
     }
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -280,6 +281,85 @@ describe('AppointmentController', () => {
       await expect(controller.createAppointment(TENANT_ID, dto)).rejects.toThrow(
         'Conflito de horário: paciente já possui consulta no mesmo período',
       )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // DTO validation — UpdateAppointmentStatusSchema (CT-53-05)
+  // -------------------------------------------------------------------------
+
+  describe('UpdateAppointmentStatusSchema DTO validation', () => {
+    let UpdateAppointmentStatusSchema: (typeof import('./dto/update-appointment-status.dto'))['UpdateAppointmentStatusSchema']
+
+    beforeEach(async () => {
+      ;({ UpdateAppointmentStatusSchema } = await import('./dto/update-appointment-status.dto'))
+    })
+
+    it('CT-53-05: should reject cancelled status without cancellationReason', () => {
+      const result = UpdateAppointmentStatusSchema.safeParse({ status: 'cancelled' })
+      expect(result.success).toBe(false)
+    })
+
+    it('CT-53-05b: should accept cancelled status with cancellationReason', () => {
+      const result = UpdateAppointmentStatusSchema.safeParse({
+        status: 'cancelled',
+        cancellationReason: 'Paciente cancelou',
+      })
+      expect(result.success).toBe(true)
+    })
+
+    it('CT-53-05c: should reject rescheduled without newDateTime', () => {
+      const result = UpdateAppointmentStatusSchema.safeParse({ status: 'rescheduled' })
+      expect(result.success).toBe(false)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // PATCH /doctor/appointments/:id/status (US-5.3)
+  // -------------------------------------------------------------------------
+
+  describe('updateAppointmentStatus', () => {
+    const USER = { sub: 'doctor-uuid-1', type: 'doctor' as const, role: 'doctor' as const }
+
+    it('should delegate to service with correct arguments', async () => {
+      const dto = { status: 'waiting' as const }
+      const expected = makeAppointment({ status: 'waiting' })
+      service.updateAppointmentStatus.mockResolvedValue(expected)
+
+      const result = await controller.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, USER, dto)
+
+      expect(service.updateAppointmentStatus).toHaveBeenCalledWith(TENANT_ID, APPOINTMENT_ID, dto, USER.sub)
+      expect(result).toBe(expected)
+    })
+
+    it('should pass actor id (sub) from JWT user', async () => {
+      const user = { sub: 'different-doctor-uuid', type: 'doctor' as const, role: 'doctor' as const }
+      const dto = { status: 'in_progress' as const }
+      service.updateAppointmentStatus.mockResolvedValue(makeAppointment({ status: 'in_progress' }))
+
+      await controller.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, user, dto)
+
+      expect(service.updateAppointmentStatus).toHaveBeenCalledWith(TENANT_ID, APPOINTMENT_ID, dto, 'different-doctor-uuid')
+    })
+
+    it('should propagate NotFoundException from service', async () => {
+      const { NotFoundException } = await import('@nestjs/common')
+      service.updateAppointmentStatus.mockRejectedValue(new NotFoundException('Consulta não encontrada'))
+
+      await expect(
+        controller.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, USER, { status: 'waiting' }),
+      ).rejects.toThrow('Consulta não encontrada')
+    })
+
+    it('should propagate BadRequestException from service on invalid transition', async () => {
+      const { BadRequestException } = await import('@nestjs/common')
+      service.updateAppointmentStatus.mockRejectedValue(
+        new BadRequestException('Transição inválida: completed → in_progress'),
+      )
+
+      await expect(
+        controller.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, USER, { status: 'in_progress' as const }),
+      ).rejects.toThrow('Transição inválida: completed → in_progress')
     })
   })
 })

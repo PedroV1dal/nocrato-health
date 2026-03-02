@@ -775,3 +775,453 @@ describe('AppointmentService — createAppointment', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Suite: updateAppointmentStatus (US-5.3)
+// ---------------------------------------------------------------------------
+
+describe('AppointmentService — updateAppointmentStatus', () => {
+  let service: AppointmentService
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockKnex: jest.Mock & { transaction: jest.Mock; fn: any }
+
+  const TENANT_ID = 'tenant-uuid-1'
+  const PATIENT_ID = 'patient-uuid-1'
+  const APPOINTMENT_ID = 'appt-uuid-1'
+  const ACTOR_ID = 'doctor-uuid-1'
+
+  const makeAppt = (status: string, overrides: Record<string, unknown> = {}) => ({
+    id: APPOINTMENT_ID,
+    tenant_id: TENANT_ID,
+    patient_id: PATIENT_ID,
+    date_time: new Date('2026-03-10T14:00:00Z'),
+    duration_minutes: 30,
+    status,
+    cancellation_reason: null,
+    rescheduled_to_id: null,
+    created_by: 'doctor',
+    started_at: null,
+    completed_at: null,
+    created_at: new Date('2026-03-01T09:00:00Z'),
+    ...overrides,
+  })
+
+  /**
+   * Mock trx para transições normais (não-rescheduled).
+   * appointments: 1ª chamada = SELECT, 2ª = UPDATE
+   * patients: 1ª chamada = SELECT, 2ª = UPDATE (somente para completed)
+   */
+  const createMockTrxNormal = (opts: {
+    existing?: Record<string, unknown> | null
+    updated?: Record<string, unknown>
+    patient?: { portal_access_code: string | null } | null
+  }) => {
+    const {
+      existing = makeAppt('scheduled'),
+      updated = makeAppt('waiting', { status: 'waiting' }),
+      patient = { portal_access_code: 'EXISTING-CODE' },
+    } = opts
+
+    const apptSelectBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(existing),
+    }
+    const apptUpdateBuilder = {
+      where: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
+      returning: jest.fn().mockResolvedValue([updated]),
+    }
+    const patientSelectBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(patient),
+    }
+    const patientUpdateBuilder = {
+      where: jest.fn().mockReturnThis(),
+      update: jest.fn().mockResolvedValue(1),
+    }
+    const eventLogBuilder = {
+      insert: jest.fn().mockResolvedValue([{ id: 'evt-uuid' }]),
+    }
+
+    let apptCalls = 0
+    let patientCalls = 0
+    const trx = jest.fn().mockImplementation((table: string) => {
+      if (table === 'appointments') {
+        apptCalls++
+        return apptCalls === 1 ? apptSelectBuilder : apptUpdateBuilder
+      }
+      if (table === 'patients') {
+        patientCalls++
+        return patientCalls === 1 ? patientSelectBuilder : patientUpdateBuilder
+      }
+      if (table === 'event_log') return eventLogBuilder
+      throw new Error(`Tabela inesperada no mock: ${table}`)
+    })
+
+    return { trx, apptSelectBuilder, apptUpdateBuilder, patientSelectBuilder, patientUpdateBuilder, eventLogBuilder }
+  }
+
+  /**
+   * Mock trx para a transição rescheduled.
+   * appointments: 1ª = SELECT existing, 2ª = SELECT FOR UPDATE conflict,
+   *               3ª = INSERT new, 4ª = UPDATE original
+   */
+  const createMockTrxRescheduled = (opts: {
+    existing?: Record<string, unknown>
+    conflict?: { id: string } | null
+    newAppointment?: Record<string, unknown>
+    updatedOriginal?: Record<string, unknown>
+  }) => {
+    const {
+      existing = makeAppt('scheduled'),
+      conflict = null,
+      newAppointment = makeAppt('scheduled', { id: 'new-appt-uuid' }),
+      updatedOriginal = makeAppt('rescheduled', {
+        status: 'rescheduled',
+        rescheduled_to_id: 'new-appt-uuid',
+      }),
+    } = opts
+
+    const selectBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(existing),
+    }
+    const conflictBuilder = {
+      where: jest.fn().mockReturnThis(),
+      whereNotIn: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      andWhereRaw: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      forUpdate: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(conflict),
+    }
+    const insertBuilder = {
+      insert: jest.fn().mockReturnThis(),
+      returning: jest.fn().mockResolvedValue([newAppointment]),
+    }
+    const updateBuilder = {
+      where: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
+      returning: jest.fn().mockResolvedValue([updatedOriginal]),
+    }
+    const eventLogBuilder = {
+      insert: jest.fn().mockResolvedValue([{ id: 'evt-uuid' }]),
+    }
+
+    let apptCalls = 0
+    const trx = jest.fn().mockImplementation((table: string) => {
+      if (table === 'appointments') {
+        apptCalls++
+        if (apptCalls === 1) return selectBuilder
+        if (apptCalls === 2) return conflictBuilder
+        if (apptCalls === 3) return insertBuilder
+        return updateBuilder
+      }
+      if (table === 'event_log') return eventLogBuilder
+      throw new Error(`Tabela inesperada no mock: ${table}`)
+    })
+
+    return { trx, selectBuilder, conflictBuilder, insertBuilder, updateBuilder, eventLogBuilder }
+  }
+
+  beforeEach(async () => {
+    const transactionMock = jest.fn()
+    mockKnex = Object.assign(jest.fn(), {
+      transaction: transactionMock,
+      fn: { now: jest.fn().mockReturnValue('NOW()') },
+    }) as jest.Mock & { transaction: jest.Mock; fn: { now: jest.Mock } }
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        AppointmentService,
+        { provide: KNEX, useValue: mockKnex },
+      ],
+    }).compile()
+
+    service = moduleRef.get<AppointmentService>(AppointmentService)
+  })
+
+  afterEach(() => jest.clearAllMocks())
+
+  // -------------------------------------------------------------------------
+  // CT-53-01: scheduled → waiting
+  // -------------------------------------------------------------------------
+
+  it('CT-53-01: should transition scheduled → waiting and return updated appointment', async () => {
+    const existing = makeAppt('scheduled')
+    const updated = makeAppt('waiting', { status: 'waiting' })
+    const { trx } = createMockTrxNormal({ existing, updated })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const result = await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'waiting' }, ACTOR_ID)
+
+    expect(result).toMatchObject({ status: 'waiting' })
+  })
+
+  it('CT-53-01b: should query appointment with tenant isolation', async () => {
+    const { trx, apptSelectBuilder } = createMockTrxNormal({})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'waiting' }, ACTOR_ID)
+
+    expect(apptSelectBuilder.where).toHaveBeenCalledWith({ id: APPOINTMENT_ID, tenant_id: TENANT_ID })
+  })
+
+  it('CT-53-01c: should record actor_id in event_log', async () => {
+    const { trx, eventLogBuilder } = createMockTrxNormal({})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'waiting' }, ACTOR_ID)
+
+    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: TENANT_ID,
+        event_type: 'appointment.status_changed',
+        actor_type: 'doctor',
+        actor_id: ACTOR_ID,
+        payload: expect.objectContaining({ old_status: 'scheduled', new_status: 'waiting' }),
+      }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-53-02: waiting → in_progress + started_at
+  // -------------------------------------------------------------------------
+
+  it('CT-53-02: should set started_at when transitioning to in_progress', async () => {
+    const existing = makeAppt('waiting')
+    const updated = makeAppt('in_progress', { status: 'in_progress', started_at: new Date() })
+    const { trx, apptUpdateBuilder } = createMockTrxNormal({ existing, updated })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const result = await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'in_progress' }, ACTOR_ID)
+
+    expect(result).toMatchObject({ status: 'in_progress' })
+    expect(apptUpdateBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'in_progress', started_at: expect.anything() }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-53-03: in_progress → completed — paciente já tem portal_access_code
+  // -------------------------------------------------------------------------
+
+  it('CT-53-03: should not generate portal_access_code when patient already has one', async () => {
+    const existing = makeAppt('in_progress')
+    const updated = makeAppt('completed', { status: 'completed', completed_at: new Date() })
+    const { trx, patientUpdateBuilder, eventLogBuilder } = createMockTrxNormal({
+      existing,
+      updated,
+      patient: { portal_access_code: 'ABC-1234-XYZ' },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
+
+    expect(patientUpdateBuilder.update).not.toHaveBeenCalled()
+    expect(eventLogBuilder.insert).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event_type: 'patient.portal_activated' }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-53-04: in_progress → completed (1ª consulta) → gera portal_access_code
+  // -------------------------------------------------------------------------
+
+  it('CT-53-04: should generate portal_access_code in AAA-1234-BBB format on first completion', async () => {
+    const existing = makeAppt('in_progress')
+    const updated = makeAppt('completed', { status: 'completed', completed_at: new Date() })
+    const { trx, patientUpdateBuilder } = createMockTrxNormal({
+      existing,
+      updated,
+      patient: { portal_access_code: null },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
+
+    expect(patientUpdateBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        portal_active: true,
+        portal_access_code: expect.stringMatching(/^[A-HJ-NP-Z]{3}-\d{4}-[A-HJ-NP-Z]{3}$/),
+      }),
+    )
+  })
+
+  it('CT-53-04b: should emit patient.portal_activated event on first completion', async () => {
+    const existing = makeAppt('in_progress')
+    const updated = makeAppt('completed', { status: 'completed', completed_at: new Date() })
+    const { trx, eventLogBuilder } = createMockTrxNormal({
+      existing,
+      updated,
+      patient: { portal_access_code: null },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
+
+    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: 'patient.portal_activated',
+        actor_type: 'doctor',
+        actor_id: ACTOR_ID,
+      }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-53-06: cancelled com motivo
+  // -------------------------------------------------------------------------
+
+  it('CT-53-06: should persist cancellation_reason on cancelled transition', async () => {
+    const existing = makeAppt('scheduled')
+    const updated = makeAppt('cancelled', {
+      status: 'cancelled',
+      cancellation_reason: 'Paciente cancelou',
+    })
+    const { trx, apptUpdateBuilder } = createMockTrxNormal({ existing, updated })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const result = await service.updateAppointmentStatus(
+      TENANT_ID,
+      APPOINTMENT_ID,
+      { status: 'cancelled', cancellationReason: 'Paciente cancelou' },
+      ACTOR_ID,
+    )
+
+    expect(result).toMatchObject({ status: 'cancelled' })
+    expect(apptUpdateBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'cancelled',
+        cancellation_reason: 'Paciente cancelou',
+      }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-53-07: rescheduled → nova consulta + atualiza original + 2 eventos
+  // -------------------------------------------------------------------------
+
+  it('CT-53-07: should create new appointment and update original on rescheduled', async () => {
+    const existing = makeAppt('scheduled')
+    const newAppt = makeAppt('scheduled', { id: 'new-appt-uuid', date_time: new Date('2026-03-20T09:00:00Z') })
+    const updatedOriginal = makeAppt('rescheduled', {
+      status: 'rescheduled',
+      rescheduled_to_id: 'new-appt-uuid',
+    })
+    const { trx } = createMockTrxRescheduled({ existing, newAppointment: newAppt, updatedOriginal })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const result = await service.updateAppointmentStatus(
+      TENANT_ID,
+      APPOINTMENT_ID,
+      { status: 'rescheduled', newDateTime: '2026-03-20T09:00:00.000Z' },
+      ACTOR_ID,
+    )
+
+    expect(result).toMatchObject({
+      original: { status: 'rescheduled', rescheduled_to_id: 'new-appt-uuid' },
+      rescheduledTo: { status: 'scheduled', id: 'new-appt-uuid' },
+    })
+  })
+
+  it('CT-53-07b: should emit two event_log entries for rescheduled', async () => {
+    const existing = makeAppt('scheduled')
+    const newAppt = makeAppt('scheduled', { id: 'new-appt-uuid' })
+    const updatedOriginal = makeAppt('rescheduled', {
+      status: 'rescheduled',
+      rescheduled_to_id: 'new-appt-uuid',
+    })
+    const { trx, eventLogBuilder } = createMockTrxRescheduled({ existing, newAppointment: newAppt, updatedOriginal })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await service.updateAppointmentStatus(
+      TENANT_ID,
+      APPOINTMENT_ID,
+      { status: 'rescheduled', newDateTime: '2026-03-20T09:00:00.000Z' },
+      ACTOR_ID,
+    )
+
+    expect(eventLogBuilder.insert).toHaveBeenCalledTimes(2)
+    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ event_type: 'appointment.rescheduled' }),
+    )
+    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ event_type: 'appointment.created' }),
+    )
+  })
+
+  it('CT-53-07c: should reject rescheduled if new datetime has conflict', async () => {
+    const existing = makeAppt('scheduled')
+    const { trx } = createMockTrxRescheduled({
+      existing,
+      conflict: { id: 'conflicting-appt-uuid' },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await expect(
+      service.updateAppointmentStatus(
+        TENANT_ID,
+        APPOINTMENT_ID,
+        { status: 'rescheduled', newDateTime: '2026-03-20T09:00:00.000Z' },
+        ACTOR_ID,
+      ),
+    ).rejects.toThrow('Conflito de horário: paciente já possui consulta no mesmo período')
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-53-08: transição inválida → 400
+  // -------------------------------------------------------------------------
+
+  it('CT-53-08: should throw BadRequestException on invalid transition', async () => {
+    const existing = makeAppt('completed')
+    const { trx } = createMockTrxNormal({ existing })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'in_progress' } as any, ACTOR_ID),
+    ).rejects.toThrow('Transição inválida: completed → in_progress')
+  })
+
+  it('CT-53-08b: should throw BadRequestException for no_show from in_progress', async () => {
+    const existing = makeAppt('in_progress')
+    const { trx } = createMockTrxNormal({ existing })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'no_show' } as any, ACTOR_ID),
+    ).rejects.toThrow('Transição inválida: in_progress → no_show')
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-53-09: consulta de outro tenant → 404
+  // -------------------------------------------------------------------------
+
+  it('CT-53-09: should throw NotFoundException when appointment not in tenant', async () => {
+    const { trx } = createMockTrxNormal({ existing: null })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await expect(
+      service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'waiting' }, ACTOR_ID),
+    ).rejects.toThrow('Consulta não encontrada')
+  })
+})

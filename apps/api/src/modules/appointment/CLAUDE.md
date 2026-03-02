@@ -13,18 +13,20 @@ consulta segue: `scheduled → waiting → in_progress → completed` (com deriv
 |--------|------|-----------|
 | GET | `/api/v1/doctor/appointments` | Listagem paginada com filtros por status, data e paciente |
 | POST | `/api/v1/doctor/appointments` | Cria consulta manualmente com verificação de conflito de horário |
+| PATCH | `/api/v1/doctor/appointments/:id/status` | Altera status seguindo máquina de estados; registra actor_id |
 
 ## Arquivos principais
 
 | Arquivo | Responsabilidade |
 |---------|-----------------|
 | `appointment.module.ts` | Registra controller e service; não reimporta DatabaseModule (é `@Global()`) |
-| `appointment.controller.ts` | Handlers HTTP; extrai tenantId do JWT via `@TenantId()` |
-| `appointment.service.ts` | Queries Knex para listagem paginada e criação com verificação de conflito |
+| `appointment.controller.ts` | Handlers HTTP; extrai tenantId via `@TenantId()`, actorId via `@CurrentUser().sub` |
+| `appointment.service.ts` | Queries Knex: listagem, criação, máquina de estados |
 | `dto/list-appointments.dto.ts` | Zod schema para query params de listagem (page, limit, status, date, patientId) |
 | `dto/create-appointment.dto.ts` | Zod schema para body de criação (patientId, dateTime, durationMinutes?) |
+| `dto/update-appointment-status.dto.ts` | Zod discriminatedUnion por status alvo; campos obrigatórios por transição |
 | `appointment.service.spec.ts` | Testes unitários do AppointmentService — mock manual do Knex |
-| `appointment.controller.spec.ts` | Testes unitários do AppointmentController |
+| `appointment.controller.spec.ts` | Testes unitários do AppointmentController + validação do DTO |
 
 ## Tabelas envolvidas
 
@@ -54,6 +56,20 @@ consulta segue: `scheduled → waiting → in_progress → completed` (com deriv
 - **Knex count retorna string do PostgreSQL**: converter com `Number()`.
 - **Filtros antes dos terminais**: aplicar `.where()` antes de `limit/offset/count` (mutação in-place do builder).
 
+### Máquina de estados (US-5.3)
+
+- **Endpoint:** `PATCH /api/v1/doctor/appointments/:id/status`
+- **DTO:** `UpdateAppointmentStatusSchema` (Zod `discriminatedUnion` por `status`)
+- **VALID_TRANSITIONS:** `scheduled → [waiting, cancelled, no_show, rescheduled]`, `waiting → [in_progress, cancelled, no_show]`, `in_progress → [completed]`; demais são terminais (array vazio)
+- **Transição inválida:** `BadRequestException('Transição inválida: {current} → {target}')`
+- **Consulta não encontrada:** `NotFoundException('Consulta não encontrada')`
+- **`→ in_progress`:** seta `started_at = knex.fn.now()`
+- **`→ completed`:** seta `completed_at = knex.fn.now()`; se `patient.portal_access_code IS NULL` → gera `AAA-1234-BBB` (charset sem I/O) → UPDATE patients `{ portal_access_code, portal_active: true }` → INSERT `patient.portal_activated` no event_log
+- **`→ cancelled`:** `cancellationReason` obrigatório no DTO (Zod valida)
+- **`→ rescheduled`:** SELECT FOR UPDATE para conflito → cria nova consulta (`status: 'scheduled'`, `created_by: 'doctor'`) → UPDATE original `{ status: 'rescheduled', rescheduled_to_id }` → dois INSERTs no event_log (`appointment.rescheduled` + `appointment.created`); retorna `{ original, rescheduledTo }`
+- **actorId:** extraído de `@CurrentUser().sub` (JWT `sub`) — registrado em `event_log.actor_id`
+- **event_log:** colunas `{ tenant_id, event_type, actor_type: 'doctor', actor_id, payload }` — sem `entity_type`/`entity_id` (não existem no schema)
+
 ### Criação manual (US-5.2)
 - **Paciente deve existir no mesmo tenant**: 404 `'Paciente não encontrado'` se não encontrado.
 - **durationMinutes opcional**: se ausente, busca `doctors.appointment_duration` pelo tenantId; fallback 30 minutos.
@@ -82,7 +98,7 @@ Todos os endpoints deste módulo requerem:
 - Documentos → `modules/document/`
 - Booking público (geração de tokens) → `modules/booking/`
 - Agendamento via WhatsApp → `modules/agent/`
-- Mudanças de status de consulta (transições do lifecycle) → futuras US do Epic 5
+- Cron de auto-transição `scheduled → waiting` → `appointment.auto-transition.service.ts` (US-5.3 decidiu deixar para US-5.5)
 
 ## Como rodar / testar isoladamente
 

@@ -151,7 +151,7 @@
 **When** PATCH `/api/v1/doctor/appointments/{id}/status` com body `{ "status": "waiting" }`
 **Then** HTTP 200, consulta com `status: "waiting"` — evento `appointment.status_changed` registrado no `event_log`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -163,7 +163,7 @@
 **When** PATCH `/api/v1/doctor/appointments/{id}/status` com body `{ "status": "in_progress" }`
 **Then** HTTP 200 com `status: "in_progress"` e `startedAt` preenchido com timestamp atual — `event_log` atualizado
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -175,7 +175,7 @@
 **When** PATCH `/api/v1/doctor/appointments/{id}/status` com body `{ "status": "completed" }`
 **Then** HTTP 200 com `status: "completed"` e `completedAt` preenchido — `portal_access_code` não alterado (já existia) — `event_log` atualizado
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -187,7 +187,7 @@
 **When** PATCH `/api/v1/doctor/appointments/{id}/status` com body `{ "status": "completed" }`
 **Then** HTTP 200 — banco: paciente agora tem `portal_access_code` no formato `AAA-1234-BBB` e `portal_active = true` — evento `patient.portal_activated` registrado no `event_log`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -199,7 +199,7 @@
 **When** PATCH `/api/v1/doctor/appointments/{id}/status` com body `{ "status": "cancelled" }` (sem `cancellationReason`)
 **Then** HTTP 400 Bad Request — consulta não alterada no banco
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -211,7 +211,7 @@
 **When** PATCH `/api/v1/doctor/appointments/{id}/status` com body `{ "status": "cancelled", "cancellationReason": "Paciente solicitou cancelamento" }`
 **Then** HTTP 200 com `status: "cancelled"` e `cancellationReason` preenchido — evento no `event_log`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -223,7 +223,7 @@
 **When** PATCH `/api/v1/doctor/appointments/{id-original}/status` com body `{ "status": "rescheduled", "newDateTime": "2026-03-20T09:00:00-03:00", "cancellationReason": "Médico indisponível" }`
 **Then** HTTP 200 com `originalAppointment.status: "rescheduled"`, `originalAppointment.rescheduledToId: "{id-nova}"`, `newAppointment.status: "scheduled"`, `newAppointment.dateTime: "2026-03-20T09:00:00-03:00"` — dois eventos no `event_log`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -235,7 +235,7 @@
 **When** PATCH `/api/v1/doctor/appointments/{id}/status` com body `{ "status": "in_progress" }`
 **Then** HTTP 400 com mensagem indicando transição inválida — status não alterado no banco
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -247,7 +247,7 @@
 **When** dr-rafael autenticado faz PATCH `/api/v1/doctor/appointments/{id}/status` com body `{ "status": "waiting" }`
 **Then** HTTP 404 — consulta de dra-carvalho não é alterada
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
