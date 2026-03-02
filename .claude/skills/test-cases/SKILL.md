@@ -1,16 +1,24 @@
 # Skill: Casos de Teste
 
-Gera casos de teste manuais executáveis para uma User Story ou fluxo,
-e os registra na seção `## Casos de Teste` do epic correspondente.
+Gera casos de teste manuais executáveis (BDD) para todas as US de um epic
+e os registra em `docs/test-cases/epic-N.md`.
 
 ---
 
 ## Quando usar
 
-- Antes da etapa de QA de qualquer US com fluxo complexo ou interface
-- Quando uma US envolve dados tenant-scoped (obrigatório incluir CT de isolamento)
+**Gatilho primário — uma vez por epic, no início:**
+- Ao iniciar um epic novo, antes de implementar a primeira US
+- Os CTs são gerados para todas as US do epic de uma só vez, com base nos critérios de aceitação documentados
+- Revelam gaps de requisito antes de codar e guiam o QA durante todo o epic
+
+**Gatilho secundário — atualização incremental:**
+- Quando uma US diverge do documentado durante implementação → atualizar os CTs junto com a documentação
 - Quando o usuário invocar `/test-cases` explicitamente
-- Antes de fechar um Epic sem cobertura E2E automatizada
+
+**Não usar:**
+- US por US durante a implementação (overhead sem ganho — o epic inteiro é mais eficiente)
+- Após o epic estar concluído (tarde demais para guiar QA)
 
 ---
 
