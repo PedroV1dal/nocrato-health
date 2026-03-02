@@ -2,6 +2,7 @@
  * US-4.1 — Controller spec: PatientController (listPatients)
  * US-4.2 — Controller spec: PatientController (getPatientProfile)
  * US-4.3 — Controller spec: PatientController (createPatient)
+ * US-4.4 — Controller spec: PatientController (updatePatient)
  *
  * Estratégia: testar que o handler delega ao service com os argumentos corretos
  * (tenantId, query dto / patientId / body dto). Os guards são desabilitados — são testados isoladamente.
@@ -104,6 +105,7 @@ describe('PatientController', () => {
       listPatients: jest.fn(),
       getPatientProfile: jest.fn(),
       createPatient: jest.fn(),
+      updatePatient: jest.fn(),
     }
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -277,6 +279,69 @@ describe('PatientController', () => {
       await expect(
         controller.createPatient(TENANT_ID, makeCreateDto()),
       ).rejects.toThrow('Telefone já cadastrado para outro paciente')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // PATCH /doctor/patients/:id — US-4.4
+  // -------------------------------------------------------------------------
+
+  describe('updatePatient', () => {
+    const UPDATE_PATIENT_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567891'
+
+    const makeUpdateDto = (overrides: Record<string, unknown> = {}) => ({
+      name: 'Maria Atualizada',
+      ...overrides,
+    })
+
+    const makeUpdatedPatient = (overrides: Record<string, unknown> = {}) => ({
+      id: UPDATE_PATIENT_ID,
+      name: 'Maria Atualizada',
+      phone: '11999990000',
+      email: 'maria@example.com',
+      source: 'manual',
+      status: 'active',
+      created_at: new Date('2024-01-15T10:00:00Z'),
+      ...overrides,
+    })
+
+    it('should call patientService.updatePatient with tenantId, patientId and body dto', async () => {
+      const dto = makeUpdateDto()
+      const updated = makeUpdatedPatient()
+      service.updatePatient.mockResolvedValue(updated)
+
+      const result = await controller.updatePatient(TENANT_ID, UPDATE_PATIENT_ID, dto)
+
+      expect(service.updatePatient).toHaveBeenCalledWith(TENANT_ID, UPDATE_PATIENT_ID, dto)
+      expect(result).toEqual(updated)
+    })
+
+    it('should return the service result directly', async () => {
+      const dto = makeUpdateDto({ phone: '11900000001' })
+      const updated = makeUpdatedPatient({ phone: '11900000001' })
+      service.updatePatient.mockResolvedValue(updated)
+
+      const result = await controller.updatePatient(TENANT_ID, UPDATE_PATIENT_ID, dto)
+
+      expect(result).toBe(updated)
+    })
+
+    it('should propagate NotFoundException when patient is not found', async () => {
+      service.updatePatient.mockRejectedValue(new NotFoundException('Paciente não encontrado'))
+
+      await expect(
+        controller.updatePatient(TENANT_ID, UPDATE_PATIENT_ID, makeUpdateDto()),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('should propagate ConflictException when phone is already registered', async () => {
+      service.updatePatient.mockRejectedValue(
+        new ConflictException('Telefone já cadastrado para outro paciente'),
+      )
+
+      await expect(
+        controller.updatePatient(TENANT_ID, UPDATE_PATIENT_ID, makeUpdateDto({ phone: '11999990000' })),
+      ).rejects.toThrow(ConflictException)
     })
   })
 })

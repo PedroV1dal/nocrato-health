@@ -3,6 +3,7 @@ import type { Knex } from 'knex'
 import { KNEX } from '@/database/knex.provider'
 import { ListPatientsQueryDto } from './dto/list-patients.dto'
 import { CreatePatientDto } from './dto/create-patient.dto'
+import { UpdatePatientDto } from './dto/update-patient.dto'
 
 // Campos públicos retornados na listagem — cpf e portal_access_code nunca são expostos
 const PUBLIC_PATIENT_FIELDS = [
@@ -135,6 +136,49 @@ export class PatientService {
       appointments,
       clinicalNotes,
       documents,
+    }
+  }
+
+  // US-4.4: Edição parcial de paciente pelo doutor
+  async updatePatient(tenantId: string, patientId: string, dto: UpdatePatientDto) {
+    // 1. Verificar se o paciente existe neste tenant — nunca vazar existência de outros tenants
+    const existing = await this.knex('patients')
+      .where({ id: patientId, tenant_id: tenantId })
+      .select('id')
+      .first()
+
+    if (!existing) {
+      throw new NotFoundException('Paciente não encontrado')
+    }
+
+    // 2. Construir objeto de update com apenas os campos presentes no dto (patch parcial real)
+    const updateData: Record<string, unknown> = {}
+    if (dto.name !== undefined) updateData.name = dto.name
+    if (dto.phone !== undefined) updateData.phone = dto.phone
+    if (dto.cpf !== undefined) updateData.cpf = dto.cpf
+    if (dto.email !== undefined) updateData.email = dto.email
+    if (dto.status !== undefined) updateData.status = dto.status
+    updateData.updated_at = this.knex.fn.now()
+
+    try {
+      // 3. Executar update com isolamento de tenant e retornar campos públicos
+      const [updated] = await this.knex('patients')
+        .where({ id: patientId, tenant_id: tenantId })
+        .update(updateData)
+        .returning(PUBLIC_PATIENT_FIELDS)
+
+      return updated
+    } catch (error: unknown) {
+      // Código PostgreSQL 23505 = unique_violation (telefone já cadastrado para este tenant)
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === '23505'
+      ) {
+        throw new ConflictException('Telefone já cadastrado para outro paciente')
+      }
+      throw error
     }
   }
 

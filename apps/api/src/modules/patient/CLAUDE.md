@@ -13,6 +13,7 @@ nunca são expostos nas respostas da API.
 | GET | `/api/v1/doctor/patients` | Listagem paginada com busca por nome/telefone e filtro por status |
 | GET | `/api/v1/doctor/patients/:id` | Perfil completo do paciente com appointments, notas clínicas e documentos |
 | POST | `/api/v1/doctor/patients` | Cria paciente manualmente; source='manual', phone único por tenant |
+| PATCH | `/api/v1/doctor/patients/:id` | Atualiza campos parciais; body vazio rejeitado; phone único por tenant |
 
 ## Arquivos principais
 
@@ -20,9 +21,10 @@ nunca são expostos nas respostas da API.
 |---------|-----------------|
 | `patient.module.ts` | Registra controller e service; não reimporta DatabaseModule (é `@Global()`) |
 | `patient.controller.ts` | Handlers HTTP; extrai tenantId do JWT via `@TenantId()` |
-| `patient.service.ts` | Queries Knex para listagem paginada, perfil completo e criação de paciente |
+| `patient.service.ts` | Queries Knex para listagem paginada, perfil completo, criação e edição de paciente |
 | `dto/list-patients.dto.ts` | Zod schema para query params de listagem (page, limit, search, status) |
 | `dto/create-patient.dto.ts` | Zod schema para body de criação (name, phone, cpf?, email?, dateOfBirth?) |
+| `dto/update-patient.dto.ts` | Zod schema para PATCH parcial (name?, phone?, cpf?, email?, status?) |
 | `patient.service.spec.ts` | Testes unitários do PatientService — mock manual do Knex |
 | `patient.controller.spec.ts` | Testes unitários do PatientController |
 
@@ -62,6 +64,7 @@ nunca são expostos nas respostas da API.
 - **Perfil — ordenação**: appointments por `date_time DESC`; clinical_notes e documents por `created_at DESC`.
 - **clinical_notes**: visíveis ao doutor no perfil do paciente (diferente do portal do paciente, que não as expõe).
 - **Criação manual**: source sempre `'manual'`; status padrão `'active'`. Phone único por tenant via `UNIQUE INDEX idx_patients_tenant_phone (tenant_id, phone)` → erro PostgreSQL `23505` → `ConflictException('Telefone já cadastrado para outro paciente')`.
+- **Edição parcial (US-4.4)**: PATCH constrói `updateData` filtrando campos `!== undefined` — campos omitidos não são sobrescrevidos. Body vazio rejeitado pelo schema Zod (`.refine()`). Mesmo tratamento de `23505` da criação. Ambas as queries (verificação e update) usam `{ id, tenant_id }` no `.where()`.
 
 ## Guards obrigatórios
 

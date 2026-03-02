@@ -2,6 +2,7 @@
  * US-4.1 — Listagem paginada de pacientes (PatientService)
  * US-4.2 — Perfil completo do paciente (PatientService)
  * US-4.3 — Criar paciente manualmente (PatientService)
+ * US-4.4 — Editar paciente parcialmente (PatientService)
  *
  * Estratégia de mock:
  *  - KNEX: mock via Symbol token, simulando o query builder encadeável do Knex
@@ -10,6 +11,7 @@
  *  - cpf e portal_access_code NÃO devem aparecer na resposta (campos sensíveis)
  *  - US-4.2: mockKnex como jest.fn() que diferencia por tabela via mockImplementation
  *  - US-4.3: insert com returning — mockInsert + mockReturning encadeados
+ *  - US-4.4: mockKnex diferencia select (verificar existência) de update por tabela + operação
  */
 
 // Mockar env ANTES de qualquer import que o carregue transitivamente.
@@ -1032,6 +1034,257 @@ describe('PatientService — createPatient', () => {
       const dto = { name: 'Erro', phone: '11988880000' }
       await expect(service.createPatient('tenant-uuid-1', dto)).rejects.toThrow('connection refused')
       await expect(service.createPatient('tenant-uuid-1', dto)).rejects.not.toThrow(ConflictException)
+    })
+  })
+})
+
+// =============================================================================
+// US-4.4 — updatePatient
+// =============================================================================
+
+const TENANT_ID_U = 'tenant-uuid-update'
+const PATIENT_ID_U = 'patient-uuid-update'
+
+const makeExistingStub = () => ({ id: PATIENT_ID_U })
+
+const makeUpdatedPatient = (overrides: Record<string, unknown> = {}) => ({
+  id: PATIENT_ID_U,
+  name: 'Maria Silva Atualizada',
+  phone: '11999990001',
+  email: 'maria.nova@example.com',
+  source: 'manual',
+  status: 'active',
+  created_at: new Date('2024-01-15T10:00:00Z'),
+  ...overrides,
+})
+
+/**
+ * Helpers que constroem os dois builders distintos usados por updatePatient:
+ *
+ *  1. selectBuilder — primeira chamada a this.knex('patients'):
+ *       .where({ id, tenant_id }).select('id').first()  → verifica existência
+ *
+ *  2. updateBuilder — segunda chamada a this.knex('patients'):
+ *       .where({ id, tenant_id }).update(data).returning(fields)  → patch
+ */
+const makeSelectBuilder = (firstValue: unknown) => {
+  const first = jest.fn().mockResolvedValue(firstValue)
+  const select = jest.fn().mockReturnValue({ first })
+  const where = jest.fn().mockReturnValue({ select, first })
+  return { where, select, first }
+}
+
+const makeUpdateBuilder = (returningValue: unknown) => {
+  const returning = jest.fn().mockResolvedValue(returningValue)
+  const update = jest.fn().mockReturnValue({ returning })
+  const where = jest.fn().mockReturnValue({ update })
+  return { where, update, returning }
+}
+
+describe('PatientService — updatePatient', () => {
+  let service: PatientService
+  let mockKnexUpdate: jest.Mock
+
+  beforeEach(async () => {
+    jest.clearAllMocks()
+
+    // Padrão: paciente existe, update retorna o paciente atualizado
+    let callCount = 0
+    mockKnexUpdate = jest.fn().mockImplementation(() => {
+      callCount++
+      if (callCount % 2 === 1) {
+        return makeSelectBuilder(makeExistingStub())
+      }
+      return makeUpdateBuilder([makeUpdatedPatient()])
+    })
+    // this.knex.fn.now() é chamado pelo service para setar updated_at
+    ;(mockKnexUpdate as unknown as Record<string, unknown>).fn = { now: jest.fn().mockReturnValue('NOW()') }
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        PatientService,
+        { provide: KNEX, useValue: mockKnexUpdate },
+      ],
+    }).compile()
+
+    service = moduleRef.get<PatientService>(PatientService)
+  })
+
+  // -------------------------------------------------------------------------
+  // Happy path — campo único atualizado
+  // -------------------------------------------------------------------------
+
+  describe('updatePatient — happy path (nome)', () => {
+    it('should update name and return patient without cpf or portal_access_code', async () => {
+      let callCount = 0
+      mockKnexUpdate.mockImplementation(() => {
+        callCount++
+        if (callCount === 1) return makeSelectBuilder(makeExistingStub())
+        return makeUpdateBuilder([makeUpdatedPatient({ name: 'Novo Nome' })])
+      })
+
+      const result = await service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { name: 'Novo Nome' })
+
+      expect(result).toMatchObject({ name: 'Novo Nome' })
+      expect(result).not.toHaveProperty('cpf')
+      expect(result).not.toHaveProperty('portal_access_code')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Happy path — patch parcial (só phone)
+  // -------------------------------------------------------------------------
+
+  describe('updatePatient — patch parcial (só phone)', () => {
+    it('should update only the phone field and return updated patient', async () => {
+      let callCount = 0
+      mockKnexUpdate.mockImplementation(() => {
+        callCount++
+        if (callCount === 1) return makeSelectBuilder(makeExistingStub())
+        return makeUpdateBuilder([makeUpdatedPatient({ phone: '11900000001' })])
+      })
+
+      const result = await service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { phone: '11900000001' })
+
+      expect(result).toMatchObject({ phone: '11900000001' })
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Happy path — todos os campos opcionais de uma vez
+  // -------------------------------------------------------------------------
+
+  describe('updatePatient — todos os campos', () => {
+    it('should update all optional fields and return patient without cpf or portal_access_code', async () => {
+      const fullUpdate = {
+        name: 'Novo Nome',
+        phone: '11900000002',
+        cpf: '12345678901',
+        email: 'novo@example.com',
+        status: 'inactive' as const,
+      }
+
+      let callCount = 0
+      mockKnexUpdate.mockImplementation(() => {
+        callCount++
+        if (callCount === 1) return makeSelectBuilder(makeExistingStub())
+        // returning nunca inclui cpf — retornamos sem o campo
+        return makeUpdateBuilder([makeUpdatedPatient({ name: 'Novo Nome', phone: '11900000002', email: 'novo@example.com', status: 'inactive' })])
+      })
+
+      const result = await service.updatePatient(TENANT_ID_U, PATIENT_ID_U, fullUpdate)
+
+      expect(result).not.toHaveProperty('cpf')
+      expect(result).not.toHaveProperty('portal_access_code')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // NotFoundException — paciente não encontrado
+  // -------------------------------------------------------------------------
+
+  describe('updatePatient — NotFoundException (paciente não encontrado)', () => {
+    it('should throw NotFoundException when patient does not exist', async () => {
+      mockKnexUpdate.mockImplementation(() => makeSelectBuilder(null))
+
+      await expect(
+        service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { name: 'X' }),
+      ).rejects.toThrow(NotFoundException)
+    })
+
+    it('should throw NotFoundException with message "Paciente não encontrado"', async () => {
+      mockKnexUpdate.mockImplementation(() => makeSelectBuilder(null))
+
+      await expect(
+        service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { name: 'X' }),
+      ).rejects.toThrow('Paciente não encontrado')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Isolamento de tenant — paciente de outro tenant retorna 404
+  // -------------------------------------------------------------------------
+
+  describe('updatePatient — isolamento de tenant', () => {
+    it('should throw NotFoundException when patient belongs to a different tenant', async () => {
+      // .where({ id, tenant_id: outroTenant }) retorna null — não vazar existência
+      mockKnexUpdate.mockImplementation(() => makeSelectBuilder(null))
+
+      await expect(
+        service.updatePatient('outro-tenant-uuid', PATIENT_ID_U, { name: 'X' }),
+      ).rejects.toThrow(NotFoundException)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // ConflictException — phone duplicado (erro 23505)
+  // -------------------------------------------------------------------------
+
+  describe('updatePatient — conflito de telefone', () => {
+    it('should throw ConflictException when phone already exists for tenant (error 23505)', async () => {
+      const pgUniqueError = Object.assign(new Error('unique violation'), { code: '23505' })
+
+      let callCount = 0
+      mockKnexUpdate.mockImplementation(() => {
+        callCount++
+        if (callCount === 1) return makeSelectBuilder(makeExistingStub())
+        // returning rejeita com erro de unique violation
+        const returning = jest.fn().mockRejectedValue(pgUniqueError)
+        const update = jest.fn().mockReturnValue({ returning })
+        const where = jest.fn().mockReturnValue({ update })
+        return { where, update, returning }
+      })
+
+      await expect(
+        service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { phone: '11999990000' }),
+      ).rejects.toThrow(ConflictException)
+    })
+
+    it('should throw ConflictException with message "Telefone já cadastrado para outro paciente"', async () => {
+      const pgUniqueError = Object.assign(new Error('unique violation'), { code: '23505' })
+
+      let callCount = 0
+      mockKnexUpdate.mockImplementation(() => {
+        callCount++
+        if (callCount === 1) return makeSelectBuilder(makeExistingStub())
+        const returning = jest.fn().mockRejectedValue(pgUniqueError)
+        const update = jest.fn().mockReturnValue({ returning })
+        const where = jest.fn().mockReturnValue({ update })
+        return { where, update, returning }
+      })
+
+      await expect(
+        service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { phone: '11999990000' }),
+      ).rejects.toThrow('Telefone já cadastrado para outro paciente')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Re-throw — erro desconhecido não é capturado
+  // -------------------------------------------------------------------------
+
+  describe('updatePatient — re-throw de erros desconhecidos', () => {
+    it('should re-throw non-unique errors without wrapping', async () => {
+      const dbError = Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' })
+
+      let callCount = 0
+      mockKnexUpdate.mockImplementation(() => {
+        callCount++
+        if (callCount === 1) return makeSelectBuilder(makeExistingStub())
+        const returning = jest.fn().mockRejectedValue(dbError)
+        const update = jest.fn().mockReturnValue({ returning })
+        const where = jest.fn().mockReturnValue({ update })
+        return { where, update, returning }
+      })
+
+      await expect(
+        service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { name: 'X' }),
+      ).rejects.toThrow('connection refused')
+
+      callCount = 0
+      await expect(
+        service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { name: 'X' }),
+      ).rejects.not.toThrow(ConflictException)
     })
   })
 })

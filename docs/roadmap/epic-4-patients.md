@@ -50,12 +50,20 @@
 
 ---
 
-## US-4.4: Como doutor, quero editar dados de um paciente
+## US-4.4: Como doutor, quero editar dados de um paciente ✅
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] PATCH /api/v1/doctor/patients/:id { name?, phone?, cpf?, email?, status? }
-- [ ] **Criterio:** Update funcional
+- [x] PATCH /api/v1/doctor/patients/:id { name?, phone?, cpf?, email?, status? }
+- [x] Patch parcial real: campos omitidos não sobrescrevem o banco
+- [x] Body vazio rejeitado pelo schema Zod (`.refine()` — ao menos 1 campo obrigatório)
+- [x] status aceita apenas 'active' | 'inactive'
+- [x] Phone único por tenant → 409 ConflictException (reutiliza padrão US-4.3)
+- [x] NotFoundException para patient inexistente ou de outro tenant (sem vazar existência)
+- [x] cpf e portal_access_code nunca expostos na resposta (.returning(PUBLIC_PATIENT_FIELDS))
+- [x] updated_at atualizado via knex.fn.now()
+- [x] 13 testes novos (337/337 suite completa)
+- [x] **Criterio:** Update funcional
 
 ---
 

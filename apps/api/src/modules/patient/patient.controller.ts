@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
 import { z } from 'zod'
 import { PatientService } from './patient.service'
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard'
@@ -9,6 +9,7 @@ import { TenantId } from '@/common/decorators/tenant.decorator'
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 import { ListPatientsQuerySchema, ListPatientsQueryDto } from './dto/list-patients.dto'
 import { createPatientSchema, CreatePatientDto } from './dto/create-patient.dto'
+import { UpdatePatientSchema, UpdatePatientDto } from './dto/update-patient.dto'
 
 @Controller('doctor/patients')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -41,5 +42,15 @@ export class PatientController {
     @Body(new ZodValidationPipe(createPatientSchema)) dto: CreatePatientDto,
   ) {
     return this.patientService.createPatient(tenantId, dto)
+  }
+
+  // US-4.4: Edição parcial de paciente pelo doutor autenticado
+  @Patch(':id')
+  updatePatient(
+    @TenantId() tenantId: string,
+    @Param('id', new ZodValidationPipe(z.string().uuid())) patientId: string,
+    @Body(new ZodValidationPipe(UpdatePatientSchema)) dto: UpdatePatientDto,
+  ) {
+    return this.patientService.updatePatient(tenantId, patientId, dto)
   }
 }
