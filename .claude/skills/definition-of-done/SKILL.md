@@ -44,6 +44,12 @@ Consultado pelo `tech-lead` e `qa` ao final de cada US.
 - [ ] Observações do tech-lead registradas se houver (`OBS-TL-N`)
 - [ ] Nenhum **🚫 BLOQUEANTE** em aberto
 
+## ✅ Documentação
+
+- [ ] Resultados dos CTs marcados em `docs/test-cases/epic-N.md` (`[x] ok` para cada CT validado)
+- [ ] US marcada como ✅ no epic doc (`docs/roadmap/epic-N-*.md`): título com ✅ e todos os checkboxes marcados
+- [ ] Docs afetadas atualizadas (schema, flows, ADR) — se não houver mudança, marcar N/A
+
 ## ✅ Commit
 
 - [ ] Formato: `<type>(<scope>): <descrição em inglês, imperativo, < 50 chars>`

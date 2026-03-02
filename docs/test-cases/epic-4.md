@@ -15,7 +15,7 @@
 **When** GET /api/v1/doctor/patients?page=1&limit=10
 **Then** HTTP 200, `data` com 3 pacientes, `pagination.total = 3`, `pagination.totalPages = 1`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -27,7 +27,7 @@
 **When** GET /api/v1/doctor/patients sem header Authorization
 **Then** HTTP 401 Unauthorized
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -39,7 +39,7 @@
 **When** Dr. Silva autenticado faz GET /api/v1/doctor/patients
 **Then** HTTP 200 com `pagination.total = 5` — pacientes de Dra. Carvalho não aparecem
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -51,7 +51,7 @@
 **When** GET /api/v1/doctor/patients?search=maria
 **Then** HTTP 200 com `data` contendo "Maria Silva" e "Mariana Costa" — "João Santos" não aparece
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -63,7 +63,7 @@
 **When** GET /api/v1/doctor/patients?status=inactive
 **Then** HTTP 200 com `data` contendo 1 paciente, `pagination.total = 1`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -75,7 +75,7 @@
 **When** GET /api/v1/doctor/patients?search=100%25 (percentual codificado como %25)
 **Then** HTTP 200 com lista vazia (sem erro 500) — LIKE escapado corretamente
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -87,7 +87,7 @@
 **When** GET /api/v1/doctor/patients
 **Then** HTTP 200 e nenhum objeto em `data` contém os campos `cpf` ou `portal_access_code`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -101,7 +101,7 @@
 **When** GET /api/v1/doctor/patients/:id (id válido da Ana)
 **Then** HTTP 200 com `{ patient: { name: "Ana Pereira", portal_active: ... }, appointments: [2 itens], clinicalNotes: [1 item], documents: [1 item] }`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -113,7 +113,7 @@
 **When** GET /api/v1/doctor/patients/:id sem header Authorization
 **Then** HTTP 401 Unauthorized
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -125,7 +125,7 @@
 **When** Dr. Silva faz GET /api/v1/doctor/patients/{id_do_carlos}
 **Then** HTTP 404 — mesmo comportamento de paciente inexistente (não vaza que o registro existe)
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -137,7 +137,7 @@
 **When** GET /api/v1/doctor/patients/nao-e-um-uuid
 **Then** HTTP 400 Bad Request — ZodValidationPipe rejeita antes de chegar ao service
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -149,7 +149,7 @@
 **When** GET /api/v1/doctor/patients/:id
 **Then** HTTP 200 com `appointments: []`, `clinicalNotes: []`, `documents: []`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -161,7 +161,7 @@
 **When** GET /api/v1/doctor/patients/:id
 **Then** appointments ordenados: 2025-03-15 → 2025-01-10 → 2024-12-01
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -173,7 +173,7 @@
 **When** GET /api/v1/doctor/patients/:id
 **Then** objeto `patient` na resposta não contém os campos `cpf` nem `portal_access_code`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -187,7 +187,7 @@
 **When** POST /api/v1/doctor/patients `{ "name": "Fernanda Oliveira", "phone": "(11) 98765-4321" }`
 **Then** HTTP 201 com `{ id, name: "Fernanda Oliveira", phone: "(11) 98765-4321", source: "manual", status: "active" }` e paciente gravado com `tenant_id` correto
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -199,7 +199,7 @@
 **When** POST /api/v1/doctor/patients sem header Authorization
 **Then** HTTP 401 Unauthorized
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -211,7 +211,7 @@
 **When** POST /api/v1/doctor/patients `{ "name": "Outro Nome", "phone": "(11) 91111-2222" }`
 **Then** HTTP 409 Conflict — phone único por tenant enforced
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -223,7 +223,7 @@
 **When** Dr. Silva faz POST /api/v1/doctor/patients `{ "name": "Pedro Alves", "phone": "(11) 93333-4444" }`
 **Then** HTTP 201 — phone é único por tenant, não globalmente
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -235,7 +235,7 @@
 **When** POST /api/v1/doctor/patients com body incluindo `"source": "whatsapp_agent"`
 **Then** HTTP 201 e paciente criado com `source = "manual"` (campo ignorado ou não aceito no DTO)
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -247,7 +247,7 @@
 **When** POST /api/v1/doctor/patients `{ "name": "Ricardo Nunes", "phone": "(21) 97777-8888" }` (sem cpf, email, dateOfBirth)
 **Then** HTTP 201 — paciente criado com esses campos como null no banco
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -259,7 +259,7 @@
 **When** POST /api/v1/doctor/patients `{}` (body vazio)
 **Then** HTTP 400 Bad Request — campos obrigatórios não enviados
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -273,7 +273,7 @@
 **When** PATCH /api/v1/doctor/patients/:id `{ "name": "Juliana Costa Souza", "email": "juliana@email.com" }`
 **Then** HTTP 200 com paciente atualizado; `name` e `email` alterados, demais campos intactos
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -285,7 +285,7 @@
 **When** PATCH /api/v1/doctor/patients/:id sem header Authorization
 **Then** HTTP 401 Unauthorized
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -297,7 +297,7 @@
 **When** Dr. Silva faz PATCH /api/v1/doctor/patients/{id_do_paciente_dela} `{ "name": "Novo Nome" }`
 **Then** HTTP 404 — dados de Dra. Carvalho não alterados
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -309,7 +309,7 @@
 **When** PATCH /api/v1/doctor/patients/{id_B} `{ "phone": "(11) 95555-6666" }`
 **Then** HTTP 409 Conflict — phone já em uso por outro paciente do tenant
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -321,7 +321,7 @@
 **When** PATCH /api/v1/doctor/patients/:id `{ "status": "inactive" }`
 **Then** HTTP 200 com `status: "inactive"` e paciente não aparece em buscas com `status=active`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -333,7 +333,7 @@
 **When** PATCH /api/v1/doctor/patients/:id `{ "email": "novo@email.com" }` (só email)
 **Then** HTTP 200 com `name = "Marcos Vinicius"` e `status = "active"` intactos
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -347,7 +347,7 @@
 **When** navegar para `/doctor/patients`
 **Then** 3 cards visíveis com nome, telefone e status de cada paciente; paginação exibida se necessário
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -359,7 +359,7 @@
 **When** digitar "ana" no campo de busca
 **Then** apenas "Ana Lima" e "Ana Souza" aparecem; "João Costa" some da lista
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -371,7 +371,7 @@
 **When** selecionar filtro "Inativo" no seletor de status
 **Then** apenas o paciente inactive é exibido
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -383,7 +383,7 @@
 **When** clicar no card de "Fernanda Oliveira"
 **Then** navegar para `/doctor/patients/{id}` com tabs: Info, Consultas, Notas, Documentos visíveis
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -395,7 +395,7 @@
 **When** clicar na tab "Consultas"
 **Then** appointments listados da mais recente para a mais antiga
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -407,7 +407,7 @@
 **When** tentar acessar `/doctor/patients` diretamente pela URL
 **Then** redirecionar para `/doctor/login`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -419,4 +419,4 @@
 **When** clicar em "Novo paciente", preencher nome e telefone `(31) 99999-0000`, confirmar
 **Then** paciente "Gustavo Ramos" aparece na lista; toast de sucesso exibido
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou

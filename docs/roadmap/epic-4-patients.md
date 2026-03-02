@@ -67,14 +67,18 @@
 
 ---
 
-## US-4.5: [FRONTEND] Paginas de pacientes
+## US-4.5: [FRONTEND] Paginas de pacientes ✅
 
 **Agentes:** `frontend` → `designer` → `qa`
 
-- [ ] routes/doctor/_layout/patients/index.tsx (lista com cards + busca + filtro status)
-- [ ] routes/doctor/_layout/patients/$patientId.tsx (perfil com tabs)
-  - [ ] Tab Info: dados editaveis
-  - [ ] Tab Consultas: historico de appointments
-  - [ ] Tab Notas: notas clinicas
-  - [ ] Tab Documentos: lista + upload
-- [ ] **Criterio:** CRUD completo no browser
+- [x] routes/doctor/patients/index.tsx (lista paginada com cards + busca + filtro status + dialog "Novo paciente")
+- [x] routes/doctor/patients/$patientId.tsx (perfil com 4 tabs)
+  - [x] Tab Info: dados editaveis com form + PATCH on save
+  - [x] Tab Consultas: historico de appointments em ordem DESC
+  - [x] Tab Notas: notas clinicas (lista read-only)
+  - [x] Tab Documentos: lista de documentos
+- [x] lib/queries/patients.ts — patientsQueryOptions, patientProfileQueryOptions, useCreatePatient, useUpdatePatient
+- [x] components/ui/{dialog,select,tabs,skeleton}.tsx — implementacao propria (sem Radix UI)
+- [x] lib/toast.ts + components/toast-container.tsx — sistema de toast via CustomEvent
+- [x] 7/7 CTs Playwright passando (CT-45-01 a CT-45-07) — commit 0ad8985
+- [x] **Criterio:** CRUD completo no browser
