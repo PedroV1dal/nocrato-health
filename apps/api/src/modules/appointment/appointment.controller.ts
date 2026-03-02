@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common'
 import { AppointmentService } from './appointment.service'
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard'
 import { TenantGuard } from '@/common/guards/tenant.guard'
@@ -7,6 +7,7 @@ import { Roles } from '@/common/decorators/roles.decorator'
 import { TenantId } from '@/common/decorators/tenant.decorator'
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 import { ListAppointmentsQuerySchema, ListAppointmentsDto } from './dto/list-appointments.dto'
+import { CreateAppointmentSchema, CreateAppointmentDto } from './dto/create-appointment.dto'
 
 @Controller('doctor/appointments')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -21,5 +22,15 @@ export class AppointmentController {
     @Query(new ZodValidationPipe(ListAppointmentsQuerySchema)) query: ListAppointmentsDto,
   ) {
     return this.appointmentService.listAppointments(tenantId, query)
+  }
+
+  // US-5.2: Criar consulta manualmente pelo doutor autenticado
+  @Post()
+  @HttpCode(201)
+  createAppointment(
+    @TenantId() tenantId: string,
+    @Body(new ZodValidationPipe(CreateAppointmentSchema)) dto: CreateAppointmentDto,
+  ) {
+    return this.appointmentService.createAppointment(tenantId, dto)
   }
 }

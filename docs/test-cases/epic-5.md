@@ -89,7 +89,7 @@
 **When** POST `/api/v1/doctor/appointments` com body `{ "patientId": "{uuid}", "dateTime": "2026-03-15T10:00:00-03:00", "durationMinutes": 30 }`
 **Then** HTTP 201 com objeto da consulta: `status: "scheduled"`, `createdBy: "doctor"`, `tenantId` correto — consulta persiste no banco
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -101,7 +101,7 @@
 **When** POST `/api/v1/doctor/appointments` com `dateTime: "2026-03-15T10:15:00-03:00"` (dentro da janela ocupada)
 **Then** HTTP 409 Conflict — nova consulta não é criada no banco
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -113,7 +113,7 @@
 **When** POST `/api/v1/doctor/appointments` com esse `patientId`
 **Then** HTTP 404 (paciente não encontrado no tenant de dr-rafael) — consulta não criada
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -125,7 +125,7 @@
 **When** POST `/api/v1/doctor/appointments` com body `{ "durationMinutes": 30 }` (sem `patientId` e sem `dateTime`)
 **Then** HTTP 400 Bad Request com detalhes dos campos faltantes — consulta não criada
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -137,7 +137,7 @@
 **When** POST `/api/v1/doctor/appointments` sem `durationMinutes`
 **Then** HTTP 201 com `durationMinutes: 45` na resposta — padrão aplicado automaticamente
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 

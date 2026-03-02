@@ -2,8 +2,8 @@
 
 ## Responsabilidade
 
-Gestão do ciclo de vida de consultas no portal do doutor. Permite listar e filtrar
-consultas vinculadas ao tenant do doutor autenticado. A máquina de estados de uma
+Gestão do ciclo de vida de consultas no portal do doutor. Permite listar, filtrar e
+criar consultas vinculadas ao tenant do doutor autenticado. A máquina de estados de uma
 consulta segue: `scheduled → waiting → in_progress → completed` (com derivações
 `cancelled`, `no_show`, `rescheduled`).
 
@@ -12,6 +12,7 @@ consulta segue: `scheduled → waiting → in_progress → completed` (com deriv
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | GET | `/api/v1/doctor/appointments` | Listagem paginada com filtros por status, data e paciente |
+| POST | `/api/v1/doctor/appointments` | Cria consulta manualmente com verificação de conflito de horário |
 
 ## Arquivos principais
 
@@ -19,8 +20,9 @@ consulta segue: `scheduled → waiting → in_progress → completed` (com deriv
 |---------|-----------------|
 | `appointment.module.ts` | Registra controller e service; não reimporta DatabaseModule (é `@Global()`) |
 | `appointment.controller.ts` | Handlers HTTP; extrai tenantId do JWT via `@TenantId()` |
-| `appointment.service.ts` | Queries Knex para listagem paginada com filtros opcionais |
+| `appointment.service.ts` | Queries Knex para listagem paginada e criação com verificação de conflito |
 | `dto/list-appointments.dto.ts` | Zod schema para query params de listagem (page, limit, status, date, patientId) |
+| `dto/create-appointment.dto.ts` | Zod schema para body de criação (patientId, dateTime, durationMinutes?) |
 | `appointment.service.spec.ts` | Testes unitários do AppointmentService — mock manual do Knex |
 | `appointment.controller.spec.ts` | Testes unitários do AppointmentController |
 
@@ -40,6 +42,7 @@ consulta segue: `scheduled → waiting → in_progress → completed` (com deriv
 
 ## Regras de negócio
 
+### Listagem (US-5.1)
 - **Isolamento por tenantId**: toda query usa `WHERE tenant_id = tenantId`. Nunca aceitar tenantId do body.
 - **tenantId extraído do JWT** via `@TenantId()` decorator.
 - **Filtro por status**: enum dos 7 valores válidos. Se omitido, retorna todos.
@@ -50,6 +53,17 @@ consulta segue: `scheduled → waiting → in_progress → completed` (com deriv
 - **count e data em paralelo**: executar `Promise.all([count clone, data clone])` para eficiência.
 - **Knex count retorna string do PostgreSQL**: converter com `Number()`.
 - **Filtros antes dos terminais**: aplicar `.where()` antes de `limit/offset/count` (mutação in-place do builder).
+
+### Criação manual (US-5.2)
+- **Paciente deve existir no mesmo tenant**: 404 `'Paciente não encontrado'` se não encontrado.
+- **durationMinutes opcional**: se ausente, busca `doctors.appointment_duration` pelo tenantId; fallback 30 minutos.
+- **Verificação de conflito com SELECT FOR UPDATE**: toda a lógica roda dentro de `knex.transaction()`.
+- **Condição de sobreposição**: `date_time < endTime AND (date_time + duration_minutes * INTERVAL '1 minute') > startTime`.
+- **Status ignorados no conflito**: `cancelled` e `completed` não bloqueiam novos agendamentos.
+- **Conflito encontrado**: 409 `'Conflito de horário: paciente já possui consulta no mesmo período'`.
+- **status fixo**: sempre `'scheduled'` na criação; `created_by` sempre `'doctor'`.
+- **Evento de audit trail**: INSERT em `event_log` com `event_type='appointment.created'`, `actor_type='doctor'`, `payload: { appointment_id, patient_id, date_time, created_by }` — feito dentro da mesma transação. Colunas corretas: `actor_type` (não `actor`); sem `entity_type`/`entity_id` (não existem no schema).
+- **Retorna 201** com os campos: `id`, `tenant_id`, `patient_id`, `date_time`, `duration_minutes`, `status`, `created_by`, `created_at`.
 
 ## Guards obrigatórios
 

@@ -87,6 +87,7 @@ describe('AppointmentController', () => {
   beforeEach(async () => {
     const mockService: jest.Mocked<Partial<AppointmentService>> = {
       listAppointments: jest.fn(),
+      createAppointment: jest.fn(),
     }
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -215,6 +216,70 @@ describe('AppointmentController', () => {
       expect(result.pagination).toHaveProperty('limit')
       expect(result.pagination).toHaveProperty('total')
       expect(result.pagination).toHaveProperty('totalPages')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // POST /doctor/appointments (US-5.2)
+  // -------------------------------------------------------------------------
+
+  describe('createAppointment', () => {
+    const makeCreateDto = (overrides: Record<string, unknown> = {}) => ({
+      patientId: PATIENT_ID,
+      dateTime: '2026-03-15T10:00:00.000Z',
+      durationMinutes: 30,
+      ...overrides,
+    })
+
+    it('should call appointmentService.createAppointment with tenantId and dto', async () => {
+      const dto = makeCreateDto()
+      const expected = makeAppointment({ id: 'new-appt-uuid', status: 'scheduled' })
+      service.createAppointment.mockResolvedValue(expected)
+
+      const result = await controller.createAppointment(TENANT_ID, dto)
+
+      expect(service.createAppointment).toHaveBeenCalledWith(TENANT_ID, dto)
+      expect(result).toEqual(expected)
+    })
+
+    it('should return the service result directly', async () => {
+      const dto = makeCreateDto()
+      const expected = makeAppointment()
+      service.createAppointment.mockResolvedValue(expected)
+
+      const result = await controller.createAppointment(TENANT_ID, dto)
+
+      expect(result).toBe(expected)
+    })
+
+    it('should pass dto without durationMinutes when omitted', async () => {
+      const dto = { patientId: PATIENT_ID, dateTime: '2026-03-15T10:00:00.000Z' }
+      const expected = makeAppointment()
+      service.createAppointment.mockResolvedValue(expected)
+
+      await controller.createAppointment(TENANT_ID, dto)
+
+      expect(service.createAppointment).toHaveBeenCalledWith(TENANT_ID, dto)
+    })
+
+    it('should propagate NotFoundException from service', async () => {
+      const { NotFoundException } = await import('@nestjs/common')
+      const dto = makeCreateDto()
+      service.createAppointment.mockRejectedValue(new NotFoundException('Paciente não encontrado'))
+
+      await expect(controller.createAppointment(TENANT_ID, dto)).rejects.toThrow('Paciente não encontrado')
+    })
+
+    it('should propagate ConflictException from service', async () => {
+      const { ConflictException } = await import('@nestjs/common')
+      const dto = makeCreateDto()
+      service.createAppointment.mockRejectedValue(
+        new ConflictException('Conflito de horário: paciente já possui consulta no mesmo período'),
+      )
+
+      await expect(controller.createAppointment(TENANT_ID, dto)).rejects.toThrow(
+        'Conflito de horário: paciente já possui consulta no mesmo período',
+      )
     })
   })
 })

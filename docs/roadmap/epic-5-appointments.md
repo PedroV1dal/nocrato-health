@@ -22,14 +22,14 @@
 
 ---
 
-## US-5.2: Como doutor, quero criar uma consulta manualmente
+## ✅ US-5.2: Como doutor, quero criar uma consulta manualmente
 
 **Agentes:** `backend` + `dba` → `tech-lead` → `qa`
 
-- [ ] POST /api/v1/doctor/appointments { patientId, dateTime, durationMinutes? }
-- [ ] created_by = 'doctor', status = 'scheduled'
-- [ ] Verifica conflito de horario (SELECT FOR UPDATE)
-- [ ] **Criterio:** Consulta criada, conflito detectado se horario ocupado
+- [x] POST /api/v1/doctor/appointments { patientId, dateTime, durationMinutes? }
+- [x] created_by = 'doctor', status = 'scheduled'
+- [x] Verifica conflito de horario (SELECT FOR UPDATE)
+- [x] **Criterio:** Consulta criada, conflito detectado se horario ocupado
 
 ---
 

@@ -444,3 +444,334 @@ describe('AppointmentService', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Suite: createAppointment (US-5.2)
+// ---------------------------------------------------------------------------
+
+describe('AppointmentService — createAppointment', () => {
+  let service: AppointmentService
+  // O service usa this.knex.transaction(...) — o mock precisa ter `.transaction` como propriedade
+  // typed. Usamos `as jest.Mock & { transaction: jest.Mock }` para satisfazer o TypeScript.
+  let mockKnex: jest.Mock & { transaction: jest.Mock }
+
+  // Fixtures
+  const TENANT_ID = 'tenant-uuid-1'
+  const PATIENT_ID = 'patient-uuid-1'
+  const APPOINTMENT_ID = 'appt-uuid-new'
+  const DATE_TIME = '2026-03-15T10:00:00.000Z'
+  const DURATION = 30
+
+  const makeCreatedAppointment = (overrides: Record<string, unknown> = {}) => ({
+    id: APPOINTMENT_ID,
+    tenant_id: TENANT_ID,
+    patient_id: PATIENT_ID,
+    date_time: new Date(DATE_TIME),
+    duration_minutes: DURATION,
+    status: 'scheduled',
+    created_by: 'doctor',
+    created_at: new Date('2026-03-01T09:00:00Z'),
+    ...overrides,
+  })
+
+  /**
+   * Cria um mock de `trx` que roteia chamadas por nome de tabela.
+   * Cada tabela tem seu próprio builder com respostas configuráveis.
+   */
+  const createMockTrx = (options: {
+    patient?: Record<string, unknown> | null
+    doctor?: { appointment_duration: number } | null
+    conflict?: { id: string } | null
+    insertedAppointment?: Record<string, unknown>
+  }) => {
+    const {
+      patient = { id: PATIENT_ID },
+      doctor = { appointment_duration: DURATION },
+      conflict = null,
+      insertedAppointment = makeCreatedAppointment(),
+    } = options
+
+    // Builder para tabela patients (select .first())
+    const patientBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(patient),
+    }
+
+    // Builder para tabela doctors (select .first())
+    const doctorBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(doctor),
+    }
+
+    // Builder para conflito de appointments (chain completa + forUpdate + first)
+    const conflictBuilder = {
+      where: jest.fn().mockReturnThis(),
+      whereNotIn: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      andWhereRaw: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      forUpdate: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(conflict),
+    }
+
+    // Builder para insert de appointment (insert + returning)
+    const mockReturning = jest.fn().mockResolvedValue([insertedAppointment])
+    const appointmentInsertBuilder = {
+      insert: jest.fn().mockReturnThis(),
+      returning: mockReturning,
+    }
+
+    // Builder para insert de event_log
+    const eventLogBuilder = {
+      insert: jest.fn().mockResolvedValue([{ id: 'event-uuid-1' }]),
+    }
+
+    // Contador para diferenciar a primeira chamada a 'appointments' (conflito)
+    // da segunda (insert) dentro da transação
+    let appointmentsCallCount = 0
+
+    const trx = jest.fn().mockImplementation((table: string) => {
+      if (table === 'patients') return patientBuilder
+      if (table === 'doctors') return doctorBuilder
+      if (table === 'event_log') return eventLogBuilder
+      if (table === 'appointments') {
+        appointmentsCallCount++
+        // 1ª chamada = query de conflito; 2ª chamada = insert
+        return appointmentsCallCount === 1 ? conflictBuilder : appointmentInsertBuilder
+      }
+      throw new Error(`Tabela inesperada no mock: ${table}`)
+    })
+
+    return { trx, patientBuilder, doctorBuilder, conflictBuilder, appointmentInsertBuilder, eventLogBuilder }
+  }
+
+  beforeEach(async () => {
+    // Cria o mock como objeto com `.transaction` já presente para evitar erro TS2339
+    const transactionMock = jest.fn()
+    mockKnex = Object.assign(jest.fn(), { transaction: transactionMock }) as jest.Mock & {
+      transaction: jest.Mock
+    }
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        AppointmentService,
+        { provide: KNEX, useValue: mockKnex },
+      ],
+    }).compile()
+
+    service = moduleRef.get<AppointmentService>(AppointmentService)
+  })
+
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-52-01: Sucesso — retorna 201 com appointment
+  // -------------------------------------------------------------------------
+
+  it('CT-52-01: should create and return the appointment on success', async () => {
+    const { trx } = createMockTrx({})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+    const result = await service.createAppointment(TENANT_ID, dto)
+
+    expect(result).toMatchObject({
+      id: APPOINTMENT_ID,
+      tenant_id: TENANT_ID,
+      patient_id: PATIENT_ID,
+      status: 'scheduled',
+      created_by: 'doctor',
+      duration_minutes: DURATION,
+    })
+  })
+
+  it('CT-52-01b: should insert appointment with correct fields', async () => {
+    const { trx, appointmentInsertBuilder } = createMockTrx({})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+    await service.createAppointment(TENANT_ID, dto)
+
+    expect(appointmentInsertBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: TENANT_ID,
+        patient_id: PATIENT_ID,
+        date_time: DATE_TIME,
+        duration_minutes: DURATION,
+        status: 'scheduled',
+        created_by: 'doctor',
+      }),
+    )
+  })
+
+  it('CT-52-01c: should insert event_log entry on success', async () => {
+    const { trx, eventLogBuilder } = createMockTrx({})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+    await service.createAppointment(TENANT_ID, dto)
+
+    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: TENANT_ID,
+        event_type: 'appointment.created',
+        actor_type: 'doctor',
+        payload: expect.objectContaining({
+          appointment_id: APPOINTMENT_ID,
+          patient_id: PATIENT_ID,
+          created_by: 'doctor',
+        }),
+      }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-52-02: 404 se paciente não existe
+  // -------------------------------------------------------------------------
+
+  it('CT-52-02: should throw NotFoundException when patient does not exist', async () => {
+    const { trx } = createMockTrx({ patient: null })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+
+    await expect(service.createAppointment(TENANT_ID, dto)).rejects.toThrow('Paciente não encontrado')
+  })
+
+  it('CT-52-02b: should not proceed to insert when patient not found', async () => {
+    const { trx, appointmentInsertBuilder } = createMockTrx({ patient: null })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+
+    await expect(service.createAppointment(TENANT_ID, dto)).rejects.toThrow()
+    expect(appointmentInsertBuilder.insert).not.toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-52-03: 409 se conflito de horário
+  // -------------------------------------------------------------------------
+
+  it('CT-52-03: should throw ConflictException when schedule conflict exists', async () => {
+    const { trx } = createMockTrx({ conflict: { id: 'existing-appt-uuid' } })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+
+    await expect(service.createAppointment(TENANT_ID, dto)).rejects.toThrow(
+      'Conflito de horário: paciente já possui consulta no mesmo período',
+    )
+  })
+
+  it('CT-52-03b: should not insert appointment when conflict is found', async () => {
+    const { trx, appointmentInsertBuilder } = createMockTrx({ conflict: { id: 'existing-appt-uuid' } })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+
+    await expect(service.createAppointment(TENANT_ID, dto)).rejects.toThrow()
+    expect(appointmentInsertBuilder.insert).not.toHaveBeenCalled()
+  })
+
+  it('CT-52-03c: should query conflict with correct tenant and patient scope', async () => {
+    const { trx, conflictBuilder } = createMockTrx({ conflict: null })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+    await service.createAppointment(TENANT_ID, dto)
+
+    expect(conflictBuilder.where).toHaveBeenCalledWith({
+      tenant_id: TENANT_ID,
+      patient_id: PATIENT_ID,
+    })
+    expect(conflictBuilder.whereNotIn).toHaveBeenCalledWith('status', ['cancelled', 'completed'])
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-52-04: durationMinutes ausente → usa doctor.appointment_duration
+  // -------------------------------------------------------------------------
+
+  it('CT-52-04: should use doctor appointment_duration when durationMinutes is not provided', async () => {
+    const doctorDuration = 45
+    const { trx, doctorBuilder, appointmentInsertBuilder } = createMockTrx({
+      doctor: { appointment_duration: doctorDuration },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    // Sem durationMinutes no DTO
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME }
+    await service.createAppointment(TENANT_ID, dto)
+
+    // Deve ter consultado a tabela doctors
+    expect(doctorBuilder.where).toHaveBeenCalledWith({ tenant_id: TENANT_ID })
+    expect(doctorBuilder.select).toHaveBeenCalledWith('appointment_duration')
+
+    // Deve ter inserido com a duração do doutor
+    expect(appointmentInsertBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ duration_minutes: doctorDuration }),
+    )
+  })
+
+  it('CT-52-04b: should fall back to 30 minutes when doctor has no appointment_duration set', async () => {
+    const { trx, appointmentInsertBuilder } = createMockTrx({
+      doctor: null,
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME }
+    await service.createAppointment(TENANT_ID, dto)
+
+    expect(appointmentInsertBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ duration_minutes: 30 }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-52-05: durationMinutes fornecido → usa o fornecido (não consulta doctors)
+  // -------------------------------------------------------------------------
+
+  it('CT-52-05: should use provided durationMinutes and skip doctor lookup', async () => {
+    const { trx, doctorBuilder, appointmentInsertBuilder } = createMockTrx({})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: 60 }
+    await service.createAppointment(TENANT_ID, dto)
+
+    // NÃO deve ter consultado a tabela doctors
+    expect(doctorBuilder.where).not.toHaveBeenCalled()
+
+    // Deve ter inserido com o durationMinutes fornecido
+    expect(appointmentInsertBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ duration_minutes: 60 }),
+    )
+  })
+
+  it('CT-52-05b: should isolate tenant in patient lookup', async () => {
+    const { trx, patientBuilder } = createMockTrx({})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+    await service.createAppointment(TENANT_ID, dto)
+
+    expect(patientBuilder.where).toHaveBeenCalledWith({
+      id: PATIENT_ID,
+      tenant_id: TENANT_ID,
+    })
+  })
+})
