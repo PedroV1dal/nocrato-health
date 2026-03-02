@@ -1,9 +1,10 @@
 /**
  * US-4.1 — Controller spec: PatientController (listPatients)
  * US-4.2 — Controller spec: PatientController (getPatientProfile)
+ * US-4.3 — Controller spec: PatientController (createPatient)
  *
  * Estratégia: testar que o handler delega ao service com os argumentos corretos
- * (tenantId, query dto / patientId). Os guards são desabilitados — são testados isoladamente.
+ * (tenantId, query dto / patientId / body dto). Os guards são desabilitados — são testados isoladamente.
  */
 
 // Mockar env ANTES de qualquer import que o carregue transitivamente.
@@ -23,7 +24,7 @@ jest.mock('@/config/env', () => ({
 }))
 
 import { Test, TestingModule } from '@nestjs/testing'
-import { ExecutionContext, NotFoundException } from '@nestjs/common'
+import { ConflictException, ExecutionContext, NotFoundException } from '@nestjs/common'
 import { PatientController } from './patient.controller'
 import { PatientService } from './patient.service'
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard'
@@ -102,6 +103,7 @@ describe('PatientController', () => {
     const mockService: jest.Mocked<Partial<PatientService>> = {
       listPatients: jest.fn(),
       getPatientProfile: jest.fn(),
+      createPatient: jest.fn(),
     }
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -211,6 +213,70 @@ describe('PatientController', () => {
       await expect(
         controller.getPatientProfile(TENANT_ID, PATIENT_ID),
       ).rejects.toThrow('Paciente não encontrado')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // POST /doctor/patients — US-4.3
+  // -------------------------------------------------------------------------
+
+  describe('createPatient', () => {
+    const makeCreateDto = (overrides: Record<string, unknown> = {}) => ({
+      name: 'João Costa',
+      phone: '11988880000',
+      ...overrides,
+    })
+
+    const makeCreatedPatient = (overrides: Record<string, unknown> = {}) => ({
+      id: 'new-patient-uuid',
+      name: 'João Costa',
+      phone: '11988880000',
+      email: null,
+      source: 'manual',
+      status: 'active',
+      created_at: new Date('2024-03-01T09:00:00Z'),
+      ...overrides,
+    })
+
+    it('should call patientService.createPatient with tenantId from JWT and body dto', async () => {
+      const dto = makeCreateDto()
+      const created = makeCreatedPatient()
+      service.createPatient.mockResolvedValue(created)
+
+      const result = await controller.createPatient(TENANT_ID, dto)
+
+      expect(service.createPatient).toHaveBeenCalledWith(TENANT_ID, dto)
+      expect(result).toEqual(created)
+    })
+
+    it('should return the service result directly', async () => {
+      const dto = makeCreateDto({ email: 'joao@example.com' })
+      const created = makeCreatedPatient({ email: 'joao@example.com' })
+      service.createPatient.mockResolvedValue(created)
+
+      const result = await controller.createPatient(TENANT_ID, dto)
+
+      expect(result).toBe(created)
+    })
+
+    it('should propagate ConflictException when phone is already registered', async () => {
+      service.createPatient.mockRejectedValue(
+        new ConflictException('Telefone já cadastrado para outro paciente'),
+      )
+
+      await expect(
+        controller.createPatient(TENANT_ID, makeCreateDto()),
+      ).rejects.toThrow(ConflictException)
+    })
+
+    it('should propagate ConflictException message when phone conflicts', async () => {
+      service.createPatient.mockRejectedValue(
+        new ConflictException('Telefone já cadastrado para outro paciente'),
+      )
+
+      await expect(
+        controller.createPatient(TENANT_ID, makeCreateDto()),
+      ).rejects.toThrow('Telefone já cadastrado para outro paciente')
     })
   })
 })

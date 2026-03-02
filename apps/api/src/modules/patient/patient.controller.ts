@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common'
 import { z } from 'zod'
 import { PatientService } from './patient.service'
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard'
@@ -8,6 +8,7 @@ import { Roles } from '@/common/decorators/roles.decorator'
 import { TenantId } from '@/common/decorators/tenant.decorator'
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 import { ListPatientsQuerySchema, ListPatientsQueryDto } from './dto/list-patients.dto'
+import { createPatientSchema, CreatePatientDto } from './dto/create-patient.dto'
 
 @Controller('doctor/patients')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -31,5 +32,14 @@ export class PatientController {
     @Param('id', new ZodValidationPipe(z.string().uuid())) patientId: string,
   ) {
     return this.patientService.getPatientProfile(tenantId, patientId)
+  }
+
+  // US-4.3: Criar paciente manualmente pelo doutor autenticado
+  @Post()
+  createPatient(
+    @TenantId() tenantId: string,
+    @Body(new ZodValidationPipe(createPatientSchema)) dto: CreatePatientDto,
+  ) {
+    return this.patientService.createPatient(tenantId, dto)
   }
 }

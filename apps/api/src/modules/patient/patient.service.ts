@@ -1,7 +1,8 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import type { Knex } from 'knex'
 import { KNEX } from '@/database/knex.provider'
 import { ListPatientsQueryDto } from './dto/list-patients.dto'
+import { CreatePatientDto } from './dto/create-patient.dto'
 
 // Campos públicos retornados na listagem — cpf e portal_access_code nunca são expostos
 const PUBLIC_PATIENT_FIELDS = [
@@ -134,6 +135,39 @@ export class PatientService {
       appointments,
       clinicalNotes,
       documents,
+    }
+  }
+
+  // US-4.3: Criação manual de paciente pelo doutor
+  async createPatient(tenantId: string, dto: CreatePatientDto) {
+    const { name, phone, cpf, email, dateOfBirth } = dto
+
+    try {
+      const [patient] = await this.knex('patients')
+        .insert({
+          tenant_id: tenantId,
+          name,
+          phone,
+          cpf: cpf ?? null,
+          email: email ?? null,
+          date_of_birth: dateOfBirth ?? null,
+          source: 'manual',
+          status: 'active',
+        })
+        .returning(PUBLIC_PATIENT_FIELDS)
+
+      return patient
+    } catch (error: unknown) {
+      // Código PostgreSQL 23505 = unique_violation (telefone já cadastrado para este tenant)
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === '23505'
+      ) {
+        throw new ConflictException('Telefone já cadastrado para outro paciente')
+      }
+      throw error
     }
   }
 }

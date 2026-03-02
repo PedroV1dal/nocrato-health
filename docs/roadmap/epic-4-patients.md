@@ -37,13 +37,16 @@
 
 ---
 
-## US-4.3: Como doutor, quero criar um paciente manualmente
+## US-4.3: Como doutor, quero criar um paciente manualmente ✅
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] POST /api/v1/doctor/patients { name, phone, cpf?, email?, dateOfBirth? }
-- [ ] source = 'manual', valida phone unico por tenant
-- [ ] **Criterio:** Paciente criado, phone unico enforced
+- [x] POST /api/v1/doctor/patients { name, phone, cpf?, email?, dateOfBirth? }
+- [x] source = 'manual' fixo, status = 'active' padrão
+- [x] Phone único por tenant (UNIQUE INDEX idx_patients_tenant_phone) → 409 ConflictException
+- [x] cpf e portal_access_code nunca expostos na resposta (.returning(PUBLIC_PATIENT_FIELDS))
+- [x] 61 testes (366/366 suite completa), cobertura 100%
+- [x] **Criterio:** Paciente criado, phone unico enforced
 
 ---
 

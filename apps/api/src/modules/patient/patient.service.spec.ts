@@ -1,6 +1,7 @@
 /**
  * US-4.1 — Listagem paginada de pacientes (PatientService)
  * US-4.2 — Perfil completo do paciente (PatientService)
+ * US-4.3 — Criar paciente manualmente (PatientService)
  *
  * Estratégia de mock:
  *  - KNEX: mock via Symbol token, simulando o query builder encadeável do Knex
@@ -8,6 +9,7 @@
  *  - Knex.count() retorna string do PostgreSQL — verificamos que o service converte com Number()
  *  - cpf e portal_access_code NÃO devem aparecer na resposta (campos sensíveis)
  *  - US-4.2: mockKnex como jest.fn() que diferencia por tabela via mockImplementation
+ *  - US-4.3: insert com returning — mockInsert + mockReturning encadeados
  */
 
 // Mockar env ANTES de qualquer import que o carregue transitivamente.
@@ -27,7 +29,7 @@ jest.mock('@/config/env', () => ({
 }))
 
 import { Test, TestingModule } from '@nestjs/testing'
-import { NotFoundException } from '@nestjs/common'
+import { ConflictException, NotFoundException } from '@nestjs/common'
 import { PatientService } from './patient.service'
 import { KNEX } from '@/database/knex.provider'
 
@@ -824,6 +826,212 @@ describe('PatientService — getPatientProfile', () => {
 
       const selectCall = patientBuilder.select.mock.calls[0][0] as string[]
       expect(selectCall).toContain('portal_active')
+    })
+  })
+})
+
+// =============================================================================
+// US-4.3 — createPatient
+// =============================================================================
+
+describe('PatientService — createPatient', () => {
+  let service: PatientService
+
+  // Mocks encadeáveis para insert com returning
+  let mockReturning: jest.Mock
+  let mockInsert: jest.Mock
+  let mockKnexCreate: jest.Mock
+
+  const makeCreatedPatient = (overrides: Record<string, unknown> = {}) => ({
+    id: 'new-patient-uuid',
+    name: 'João Costa',
+    phone: '11988880000',
+    email: 'joao@example.com',
+    source: 'manual',
+    status: 'active',
+    created_at: new Date('2024-03-01T09:00:00Z'),
+    ...overrides,
+  })
+
+  beforeEach(async () => {
+    jest.clearAllMocks()
+
+    mockReturning = jest.fn().mockResolvedValue([makeCreatedPatient()])
+    mockInsert = jest.fn().mockReturnValue({ returning: mockReturning })
+    mockKnexCreate = jest.fn().mockReturnValue({ insert: mockInsert })
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        PatientService,
+        { provide: KNEX, useValue: mockKnexCreate },
+      ],
+    }).compile()
+
+    service = moduleRef.get<PatientService>(PatientService)
+  })
+
+  // -------------------------------------------------------------------------
+  // Happy path
+  // -------------------------------------------------------------------------
+
+  describe('createPatient — happy path', () => {
+    it('should insert patient and return created record without sensitive fields', async () => {
+      const dto = { name: 'João Costa', phone: '11988880000', email: 'joao@example.com' }
+      const result = await service.createPatient('tenant-uuid-1', dto)
+
+      expect(result).toEqual(makeCreatedPatient())
+      expect(result).not.toHaveProperty('cpf')
+      expect(result).not.toHaveProperty('portal_access_code')
+    })
+
+    it('should call knex("patients").insert(...).returning(PUBLIC_PATIENT_FIELDS)', async () => {
+      const dto = { name: 'João Costa', phone: '11988880000' }
+      await service.createPatient('tenant-uuid-1', dto)
+
+      expect(mockKnexCreate).toHaveBeenCalledWith('patients')
+      expect(mockInsert).toHaveBeenCalled()
+      expect(mockReturning).toHaveBeenCalledWith([
+        'id',
+        'name',
+        'phone',
+        'email',
+        'source',
+        'status',
+        'created_at',
+      ])
+    })
+
+    it('should return the first element of the returning array', async () => {
+      const created = makeCreatedPatient({ name: 'Ana Lima' })
+      mockReturning.mockResolvedValue([created])
+
+      const dto = { name: 'Ana Lima', phone: '11977770000' }
+      const result = await service.createPatient('tenant-uuid-1', dto)
+
+      expect(result).toBe(created)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // source e status são sempre fixos
+  // -------------------------------------------------------------------------
+
+  describe('createPatient — source e status fixos', () => {
+    it('should always set source to "manual" regardless of dto', async () => {
+      const dto = { name: 'Maria', phone: '11966660000' }
+      await service.createPatient('tenant-uuid-1', dto)
+
+      const insertedData = mockInsert.mock.calls[0][0] as Record<string, unknown>
+      expect(insertedData.source).toBe('manual')
+    })
+
+    it('should always set status to "active"', async () => {
+      const dto = { name: 'Maria', phone: '11966660000' }
+      await service.createPatient('tenant-uuid-1', dto)
+
+      const insertedData = mockInsert.mock.calls[0][0] as Record<string, unknown>
+      expect(insertedData.status).toBe('active')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Isolamento de tenant
+  // -------------------------------------------------------------------------
+
+  describe('createPatient — isolamento de tenant', () => {
+    it('should always use tenantId from JWT — not from dto', async () => {
+      const dto = { name: 'Pedro', phone: '11955550000' }
+      await service.createPatient('tenant-jwt-uuid', dto)
+
+      const insertedData = mockInsert.mock.calls[0][0] as Record<string, unknown>
+      expect(insertedData.tenant_id).toBe('tenant-jwt-uuid')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Campos opcionais
+  // -------------------------------------------------------------------------
+
+  describe('createPatient — campos opcionais', () => {
+    it('should insert cpf as null when not provided', async () => {
+      const dto = { name: 'Carlos', phone: '11944440000' }
+      await service.createPatient('tenant-uuid-1', dto)
+
+      const insertedData = mockInsert.mock.calls[0][0] as Record<string, unknown>
+      expect(insertedData.cpf).toBeNull()
+    })
+
+    it('should insert email as null when not provided', async () => {
+      const dto = { name: 'Carlos', phone: '11944440000' }
+      await service.createPatient('tenant-uuid-1', dto)
+
+      const insertedData = mockInsert.mock.calls[0][0] as Record<string, unknown>
+      expect(insertedData.email).toBeNull()
+    })
+
+    it('should insert date_of_birth as null when dateOfBirth not provided', async () => {
+      const dto = { name: 'Carlos', phone: '11944440000' }
+      await service.createPatient('tenant-uuid-1', dto)
+
+      const insertedData = mockInsert.mock.calls[0][0] as Record<string, unknown>
+      expect(insertedData.date_of_birth).toBeNull()
+    })
+
+    it('should pass cpf to insert when provided', async () => {
+      const dto = { name: 'Carlos', phone: '11944440000', cpf: '123.456.789-00' }
+      await service.createPatient('tenant-uuid-1', dto)
+
+      const insertedData = mockInsert.mock.calls[0][0] as Record<string, unknown>
+      expect(insertedData.cpf).toBe('123.456.789-00')
+    })
+
+    it('should pass email to insert when provided', async () => {
+      const dto = { name: 'Carlos', phone: '11944440000', email: 'carlos@example.com' }
+      await service.createPatient('tenant-uuid-1', dto)
+
+      const insertedData = mockInsert.mock.calls[0][0] as Record<string, unknown>
+      expect(insertedData.email).toBe('carlos@example.com')
+    })
+
+    it('should map dateOfBirth to date_of_birth in insert', async () => {
+      const dto = { name: 'Carlos', phone: '11944440000', dateOfBirth: '1990-05-15' }
+      await service.createPatient('tenant-uuid-1', dto)
+
+      const insertedData = mockInsert.mock.calls[0][0] as Record<string, unknown>
+      expect(insertedData.date_of_birth).toBe('1990-05-15')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Conflito de phone — erro 23505
+  // -------------------------------------------------------------------------
+
+  describe('createPatient — conflito de telefone', () => {
+    it('should throw ConflictException when phone already exists for tenant (error 23505)', async () => {
+      const pgUniqueError = Object.assign(new Error('unique violation'), { code: '23505' })
+      mockReturning.mockRejectedValue(pgUniqueError)
+
+      const dto = { name: 'Duplicado', phone: '11999990000' }
+      await expect(service.createPatient('tenant-uuid-1', dto)).rejects.toThrow(ConflictException)
+    })
+
+    it('should throw ConflictException with message "Telefone já cadastrado para outro paciente"', async () => {
+      const pgUniqueError = Object.assign(new Error('unique violation'), { code: '23505' })
+      mockReturning.mockRejectedValue(pgUniqueError)
+
+      const dto = { name: 'Duplicado', phone: '11999990000' }
+      await expect(service.createPatient('tenant-uuid-1', dto)).rejects.toThrow(
+        'Telefone já cadastrado para outro paciente',
+      )
+    })
+
+    it('should re-throw non-unique errors without wrapping', async () => {
+      const dbError = Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' })
+      mockReturning.mockRejectedValue(dbError)
+
+      const dto = { name: 'Erro', phone: '11988880000' }
+      await expect(service.createPatient('tenant-uuid-1', dto)).rejects.toThrow('connection refused')
+      await expect(service.createPatient('tenant-uuid-1', dto)).rejects.not.toThrow(ConflictException)
     })
   })
 })
