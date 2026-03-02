@@ -5,10 +5,11 @@ import { InviteModule } from './modules/invite/invite.module'
 import { AgencyModule } from './modules/agency/agency.module'
 import { DoctorModule } from './modules/doctor/doctor.module'
 import { PatientModule } from './modules/patient/patient.module'
+import { AppointmentModule } from './modules/appointment/appointment.module'
 import { HealthController } from './modules/health/health.controller'
 
 @Module({
-  imports: [DatabaseModule, AuthModule, InviteModule, AgencyModule, DoctorModule, PatientModule],
+  imports: [DatabaseModule, AuthModule, InviteModule, AgencyModule, DoctorModule, PatientModule, AppointmentModule],
   controllers: [HealthController],
 })
 export class AppModule {}

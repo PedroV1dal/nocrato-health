@@ -1,0 +1,220 @@
+/**
+ * US-5.1 — Controller spec: AppointmentController (listAppointments)
+ *
+ * Estratégia: testar que o handler delega ao service com os argumentos corretos
+ * (tenantId, query dto). Os guards são desabilitados — são testados isoladamente.
+ */
+
+// Mockar env ANTES de qualquer import que o carregue transitivamente.
+// env.ts chama process.exit(1) se vars estiverem ausentes — não pode rodar em testes.
+jest.mock('@/config/env', () => ({
+  env: {
+    JWT_SECRET: 'test-secret-at-least-16-chars',
+    JWT_REFRESH_SECRET: 'test-refresh-secret-at-least-16',
+    JWT_EXPIRES_IN: '15m',
+    JWT_REFRESH_EXPIRES_IN: '7d',
+    DB_HOST: 'localhost',
+    DB_PORT: 5432,
+    DB_NAME: 'nocrato_test',
+    DB_USER: 'postgres',
+    DB_PASSWORD: 'postgres',
+  },
+}))
+
+import { Test, TestingModule } from '@nestjs/testing'
+import { ExecutionContext } from '@nestjs/common'
+import { AppointmentController } from './appointment.controller'
+import { AppointmentService } from './appointment.service'
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard'
+import { TenantGuard } from '@/common/guards/tenant.guard'
+import { RolesGuard } from '@/common/guards/roles.guard'
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const TENANT_ID = 'tenant-uuid-1'
+const PATIENT_ID = 'patient-uuid-1'
+const APPOINTMENT_ID = 'appt-uuid-1'
+
+const makeAppointment = (overrides: Record<string, unknown> = {}) => ({
+  id: APPOINTMENT_ID,
+  tenant_id: TENANT_ID,
+  patient_id: PATIENT_ID,
+  date_time: new Date('2026-03-10T14:00:00Z'),
+  duration_minutes: 30,
+  status: 'scheduled',
+  cancellation_reason: null,
+  rescheduled_to_id: null,
+  created_by: 'doctor',
+  started_at: null,
+  completed_at: null,
+  created_at: new Date('2026-03-01T09:00:00Z'),
+  ...overrides,
+})
+
+const makePaginatedResponse = (
+  appointments: ReturnType<typeof makeAppointment>[],
+  total = 1,
+  page = 1,
+  limit = 20,
+) => ({
+  data: appointments,
+  pagination: {
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit),
+  },
+})
+
+// ---------------------------------------------------------------------------
+// Guard passthrough mock (desabilita guards nas specs de controller)
+// ---------------------------------------------------------------------------
+
+const allowAllGuard = {
+  canActivate: (_ctx: ExecutionContext) => true,
+}
+
+// ---------------------------------------------------------------------------
+// Suite
+// ---------------------------------------------------------------------------
+
+describe('AppointmentController', () => {
+  let controller: AppointmentController
+  let service: jest.Mocked<AppointmentService>
+
+  beforeEach(async () => {
+    const mockService: jest.Mocked<Partial<AppointmentService>> = {
+      listAppointments: jest.fn(),
+    }
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      controllers: [AppointmentController],
+      providers: [
+        { provide: AppointmentService, useValue: mockService },
+      ],
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue(allowAllGuard)
+      .overrideGuard(TenantGuard)
+      .useValue(allowAllGuard)
+      .overrideGuard(RolesGuard)
+      .useValue(allowAllGuard)
+      .compile()
+
+    controller = moduleRef.get<AppointmentController>(AppointmentController)
+    service = moduleRef.get(AppointmentService)
+  })
+
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  // -------------------------------------------------------------------------
+  // GET /doctor/appointments
+  // -------------------------------------------------------------------------
+
+  describe('listAppointments', () => {
+    it('should call appointmentService.listAppointments with tenantId and default dto', async () => {
+      const query = { page: 1, limit: 20 }
+      const expected = makePaginatedResponse([makeAppointment()])
+      service.listAppointments.mockResolvedValue(expected)
+
+      const result = await controller.listAppointments(TENANT_ID, query)
+
+      expect(service.listAppointments).toHaveBeenCalledWith(TENANT_ID, query)
+      expect(result).toEqual(expected)
+    })
+
+    it('should pass status filter to the service', async () => {
+      const query = { page: 1, limit: 20, status: 'scheduled' as const }
+      const expected = makePaginatedResponse([makeAppointment({ status: 'scheduled' })])
+      service.listAppointments.mockResolvedValue(expected)
+
+      const result = await controller.listAppointments(TENANT_ID, query)
+
+      expect(service.listAppointments).toHaveBeenCalledWith(TENANT_ID, query)
+      expect(result).toEqual(expected)
+    })
+
+    it('should pass date filter to the service', async () => {
+      const query = { page: 1, limit: 20, date: '2026-03-10' }
+      const expected = makePaginatedResponse([makeAppointment()])
+      service.listAppointments.mockResolvedValue(expected)
+
+      const result = await controller.listAppointments(TENANT_ID, query)
+
+      expect(service.listAppointments).toHaveBeenCalledWith(TENANT_ID, query)
+      expect(result).toEqual(expected)
+    })
+
+    it('should pass patientId filter to the service', async () => {
+      const query = { page: 1, limit: 20, patientId: PATIENT_ID }
+      const expected = makePaginatedResponse([makeAppointment()])
+      service.listAppointments.mockResolvedValue(expected)
+
+      const result = await controller.listAppointments(TENANT_ID, query)
+
+      expect(service.listAppointments).toHaveBeenCalledWith(TENANT_ID, query)
+      expect(result).toEqual(expected)
+    })
+
+    it('should pass all filters simultaneously to the service', async () => {
+      const query = {
+        page: 1,
+        limit: 10,
+        status: 'in_progress' as const,
+        date: '2026-03-10',
+        patientId: PATIENT_ID,
+      }
+      const expected = makePaginatedResponse([makeAppointment({ status: 'in_progress' })], 1, 1, 10)
+      service.listAppointments.mockResolvedValue(expected)
+
+      const result = await controller.listAppointments(TENANT_ID, query)
+
+      expect(service.listAppointments).toHaveBeenCalledWith(TENANT_ID, query)
+      expect(result).toEqual(expected)
+    })
+
+    it('should return the service result directly', async () => {
+      const appointments = [
+        makeAppointment({ id: 'appt-uuid-1' }),
+        makeAppointment({ id: 'appt-uuid-2', status: 'completed' }),
+      ]
+      const expected = makePaginatedResponse(appointments, 2)
+      service.listAppointments.mockResolvedValue(expected)
+
+      const result = await controller.listAppointments(TENANT_ID, { page: 1, limit: 20 })
+
+      expect(result).toBe(expected)
+    })
+
+    it('should return empty list when service returns no results', async () => {
+      const expected = {
+        data: [],
+        pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+      }
+      service.listAppointments.mockResolvedValue(expected)
+
+      const result = await controller.listAppointments(TENANT_ID, { page: 1, limit: 20 })
+
+      expect(result.data).toEqual([])
+      expect(result.pagination.total).toBe(0)
+    })
+
+    it('should forward the response with correct pagination shape', async () => {
+      const expected = makePaginatedResponse([makeAppointment()], 1, 1, 20)
+      service.listAppointments.mockResolvedValue(expected)
+
+      const result = await controller.listAppointments(TENANT_ID, { page: 1, limit: 20 })
+
+      expect(result).toHaveProperty('data')
+      expect(result).toHaveProperty('pagination')
+      expect(result.pagination).toHaveProperty('page')
+      expect(result.pagination).toHaveProperty('limit')
+      expect(result.pagination).toHaveProperty('total')
+      expect(result.pagination).toHaveProperty('totalPages')
+    })
+  })
+})

@@ -8,15 +8,17 @@
 | **Dependencies** | EPIC 3 (Onboarding do Doutor) |
 | **User Stories** | 6 |
 
+> **Casos de teste:** [docs/test-cases/epic-5.md](../test-cases/epic-5.md)
+
 ---
 
-## US-5.1: Como doutor, quero ver minhas consultas (com filtros)
+## ✅ US-5.1: Como doutor, quero ver minhas consultas (com filtros)
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] GET /api/v1/doctor/appointments?status=scheduled&date=2024-01-15&page=1
-- [ ] Filtros: status, data, paciente
-- [ ] **Criterio:** Listagem com filtros funcionais
+- [x] GET /api/v1/doctor/appointments?status=scheduled&date=2024-01-15&page=1
+- [x] Filtros: status, data, paciente
+- [x] **Criterio:** Listagem com filtros funcionais
 
 ---
 
