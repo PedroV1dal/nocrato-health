@@ -8,6 +8,8 @@
 | **Dependencies** | EPIC 3 (Onboarding do Doutor) |
 | **User Stories** | 5 |
 
+> **Casos de teste:** [docs/test-cases/epic-4.md](../test-cases/epic-4.md)
+
 ---
 
 ## US-4.1: Como doutor, quero ver a lista dos meus pacientes ✅

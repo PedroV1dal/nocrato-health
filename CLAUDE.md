@@ -210,6 +210,15 @@ Consulte `.claude/agents/qa.md` — seção "Playwright via MCP". Resumo: roda l
 | `epic-10-patient-portal.md` | Portal do paciente                                               |
 | `epic-11-deploy.md`         | Polish, Swagger, seed, deploy Hetzner                            |
 
+### `docs/test-cases/`
+
+| Arquivo        | Conteúdo                                                                   |
+| -------------- | -------------------------------------------------------------------------- |
+| `epic-N.md`    | Casos de teste manuais (BDD) por epic — linkado no topo do epic doc        |
+
+Os epic docs referenciam o arquivo via `> **Casos de teste:** [docs/test-cases/epic-N.md](...)`.
+Gerados pela skill `/test-cases` antes da etapa de QA de cada US.
+
 ### `.claude/`
 
 | Arquivo                 | Conteúdo                                                                                        |

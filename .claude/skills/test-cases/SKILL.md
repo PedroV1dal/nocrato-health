@@ -86,25 +86,34 @@ Use o formato BDD híbrido abaixo para cada caso. Numere sequencialmente como `C
 - Usar dados realistas: nomes brasileiros, CRMs válidos, telefones no formato `(11) 99999-9999`
 - Nunca escrever CTs para o que os unit tests já cobrem exaustivamente (ex: validação de campos isolada)
 
-### 4. Registrar no epic doc
+### 4. Registrar em arquivo dedicado por epic
 
-Adicionar os casos de teste ao final da US correspondente no epic doc,
-sob uma seção `#### Casos de Teste`:
+Os casos de teste ficam em **`docs/test-cases/epic-N.md`** (um arquivo por epic),
+separados do epic doc para não inflá-lo.
+
+**Estrutura do arquivo `docs/test-cases/epic-N.md`:**
 
 ```markdown
-## US-X.Y: [título da US]
+# Casos de Teste — Epic N: [Título]
 
-[conteúdo existente da US...]
+> Epic doc: [docs/roadmap/epic-N-*.md](../roadmap/epic-N-*.md)
+> Gerado em: YYYY-MM-DD
 
-#### Casos de Teste
+---
 
-> Gerados em: YYYY-MM-DD
+## US-N.Y — [título da US]
 
-### CT-XY-01 — ...
+### CT-NY-01 — ...
 ...
 ```
 
-Se a seção já existir, acrescentar os novos casos sem remover os anteriores.
+**No epic doc**, adicionar um link no topo (logo após a tabela de metadados):
+
+```markdown
+> **Casos de teste:** [docs/test-cases/epic-N.md](../test-cases/epic-N.md)
+```
+
+Se o arquivo já existir, acrescentar a nova seção de US sem remover as anteriores.
 
 ### 5. Apresentar resumo
 
