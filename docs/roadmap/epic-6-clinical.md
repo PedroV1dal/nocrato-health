@@ -8,15 +8,17 @@
 | **Dependencies** | EPIC 4 (Gestao de Pacientes) |
 | **User Stories** | 5 |
 
+> **Casos de teste:** [docs/test-cases/epic-6.md](../test-cases/epic-6.md)
+
 ---
 
-## US-6.1: Como doutor, quero criar uma nota clinica durante/apos atendimento
+## ✅ US-6.1: Como doutor, quero criar uma nota clinica durante/apos atendimento
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] POST /api/v1/doctor/clinical-notes { appointmentId, patientId, content }
-- [ ] Emite evento note.created no event_log (agente sabe)
-- [ ] **Criterio:** Nota criada, evento emitido
+- [x] POST /api/v1/doctor/clinical-notes { appointmentId, patientId, content }
+- [x] Emite evento note.created no event_log (agente sabe)
+- [x] **Criterio:** Nota criada, evento emitido
 
 ---
 
