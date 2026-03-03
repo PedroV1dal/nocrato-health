@@ -44,12 +44,15 @@
 
 ---
 
-## US-6.4: Como doutor, quero listar documentos de um paciente
+## ✅ US-6.4: Como doutor, quero listar documentos de um paciente
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] GET /api/v1/doctor/documents?patientId=X&type=prescription&page=1
-- [ ] **Criterio:** Listagem com filtro por tipo
+- [x] GET /api/v1/doctor/documents?patientId=X&type=prescription&page=1
+- [x] Filtro opcional por type (prescription|certificate|exam|other)
+- [x] Paginação: page, limit (default 10, max 100); retorna `{ data[], pagination }`
+- [x] Isolamento: WHERE tenant_id + patient_id — cross-tenant retorna data:[] sem 404
+- [x] **Criterio:** Listagem com filtro por tipo
 
 ---
 

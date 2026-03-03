@@ -28,6 +28,7 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { NotFoundException } from '@nestjs/common'
 import { DocumentService } from './document.service'
 import { KNEX } from '@/database/knex.provider'
+import type { ListDocumentsDto } from './dto/list-documents.dto'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -301,5 +302,165 @@ describe('DocumentService — createDocument', () => {
     ).rejects.toThrow(NotFoundException)
 
     expect(eventLogBuilder.insert).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Suite — listDocuments (US-6.4)
+// ---------------------------------------------------------------------------
+
+describe('DocumentService — listDocuments', () => {
+  let service: DocumentService
+  let mockKnex: jest.Mock & { transaction: jest.Mock }
+
+  // Builder mocks — redeclarados em cada beforeEach para isolamento total
+  let mockWhere: jest.Mock
+  let mockClone: jest.Mock
+  let mockCount: jest.Mock
+  let mockCountFirst: jest.Mock
+  let mockSelect: jest.Mock
+  let mockOrderBy: jest.Mock
+  let mockOffset: jest.Mock
+  let mockLimit: jest.Mock
+
+  beforeEach(async () => {
+    const transactionMock = jest.fn()
+    mockKnex = Object.assign(jest.fn(), {
+      transaction: transactionMock,
+    }) as jest.Mock & { transaction: jest.Mock }
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        DocumentService,
+        { provide: KNEX, useValue: mockKnex },
+      ],
+    }).compile()
+
+    service = moduleRef.get<DocumentService>(DocumentService)
+  })
+
+  beforeEach(() => {
+    mockCountFirst = jest.fn()
+    mockCount = jest.fn().mockReturnValue({ first: mockCountFirst })
+    mockLimit = jest.fn().mockResolvedValue([])
+    mockOffset = jest.fn().mockReturnValue({ limit: mockLimit })
+    mockOrderBy = jest.fn().mockReturnValue({ offset: mockOffset })
+    mockSelect = jest.fn().mockReturnValue({ orderBy: mockOrderBy })
+    mockWhere = jest.fn().mockReturnThis()
+
+    // clone retorna builder completo — resiliente a reordenações futuras
+    const cloneBuilder = {
+      where: jest.fn().mockReturnThis(),
+      count: mockCount,
+    }
+    mockClone = jest.fn().mockReturnValue(cloneBuilder)
+
+    const builder = {
+      where: mockWhere,
+      clone: mockClone,
+      select: mockSelect,
+    }
+
+    mockKnex.mockReturnValue(builder)
+  })
+
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-64-01: Happy path sem filtro de tipo
+  // -------------------------------------------------------------------------
+
+  it('CT-64-01: should return all patient documents with correct pagination', async () => {
+    const documents = [
+      makeCreatedDocument({ id: 'doc-uuid-1' }),
+      makeCreatedDocument({ id: 'doc-uuid-2', type: 'exam' }),
+    ]
+    mockCountFirst.mockResolvedValue({ count: '2' })
+    mockLimit.mockResolvedValue(documents)
+
+    const query: ListDocumentsDto = { patientId: PATIENT_ID, page: 1, limit: 10 }
+    const result = await service.listDocuments(TENANT_ID, query)
+
+    expect(result.data).toHaveLength(2)
+    expect(result.pagination).toEqual({ page: 1, limit: 10, total: 2, totalPages: 1 })
+    // Isolamento: builder base recebe tenant_id e patient_id
+    expect(mockWhere).toHaveBeenCalledWith({ tenant_id: TENANT_ID, patient_id: PATIENT_ID })
+    // Sem filtro de tipo: where chamado apenas uma vez (no builder base)
+    expect(mockWhere).toHaveBeenCalledTimes(1)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-64-02: Filtro por type='prescription'
+  // -------------------------------------------------------------------------
+
+  it('CT-64-02: should apply type filter when provided', async () => {
+    const filtered = [makeCreatedDocument({ type: 'prescription' })]
+    mockCountFirst.mockResolvedValue({ count: '1' })
+    mockLimit.mockResolvedValue(filtered)
+
+    const query: ListDocumentsDto = { patientId: PATIENT_ID, type: 'prescription', page: 1, limit: 10 }
+    const result = await service.listDocuments(TENANT_ID, query)
+
+    // where chamado duas vezes: base + filtro de tipo
+    expect(mockWhere).toHaveBeenCalledWith({ tenant_id: TENANT_ID, patient_id: PATIENT_ID })
+    expect(mockWhere).toHaveBeenCalledWith({ type: 'prescription' })
+    expect(mockWhere).toHaveBeenCalledTimes(2)
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0]).toMatchObject({ type: 'prescription' })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-64-03: Isolamento de tenant — retorna lista vazia (não 404)
+  // -------------------------------------------------------------------------
+
+  it('CT-64-03: should include tenant_id in query and return empty list for cross-tenant patient', async () => {
+    mockCountFirst.mockResolvedValue({ count: '0' })
+    mockLimit.mockResolvedValue([])
+
+    const query: ListDocumentsDto = { patientId: 'other-tenant-patient-uuid', page: 1, limit: 10 }
+    const result = await service.listDocuments(TENANT_ID, query)
+
+    expect(mockWhere).toHaveBeenCalledWith({
+      tenant_id: TENANT_ID,
+      patient_id: 'other-tenant-patient-uuid',
+    })
+    // Retorna lista vazia — nunca lança NotFoundException
+    expect(result.data).toEqual([])
+    expect(result.pagination.total).toBe(0)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-64-04: Paciente sem documentos — count=0
+  // -------------------------------------------------------------------------
+
+  it('CT-64-04: should return empty data and zero totals when patient has no documents', async () => {
+    mockCountFirst.mockResolvedValue({ count: '0' })
+    mockLimit.mockResolvedValue([])
+
+    const query: ListDocumentsDto = { patientId: PATIENT_ID, page: 1, limit: 10 }
+    const result = await service.listDocuments(TENANT_ID, query)
+
+    expect(result).toEqual({
+      data: [],
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-64-05: Paginação — page=2, limit=5 → offset=5
+  // -------------------------------------------------------------------------
+
+  it('CT-64-05: should apply correct offset and limit for page=2, limit=5', async () => {
+    mockCountFirst.mockResolvedValue({ count: '12' })
+    mockLimit.mockResolvedValue([makeCreatedDocument()])
+
+    const query: ListDocumentsDto = { patientId: PATIENT_ID, page: 2, limit: 5 }
+    const result = await service.listDocuments(TENANT_ID, query)
+
+    expect(mockOffset).toHaveBeenCalledWith(5)   // (2-1) * 5
+    expect(mockLimit).toHaveBeenCalledWith(5)
+    expect(result.pagination).toEqual({ page: 2, limit: 5, total: 12, totalPages: 3 })
   })
 })

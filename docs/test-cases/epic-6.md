@@ -207,7 +207,7 @@
 **When** GET `/api/v1/doctor/documents?patientId={id}&page=1`
 **Then** HTTP 200 com `{ data: [3 documentos], pagination: { total: 3 } }` com campos `id, type, fileName, fileUrl, description, createdAt`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -219,7 +219,7 @@
 **When** GET `/api/v1/doctor/documents?patientId={id}&type=prescription`
 **Then** HTTP 200 com apenas os 2 documentos do tipo `prescription` — outros tipos não aparecem
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -231,7 +231,7 @@
 **When** `dr-silva` faz GET `/api/v1/doctor/documents?patientId={id de paciente de dra-carvalho}`
 **Then** HTTP 200 com `data: []` — nenhum documento de tenant alheio exposto
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -243,7 +243,7 @@
 **When** GET `/api/v1/doctor/documents?patientId=qualquer-id` sem `Authorization`
 **Then** HTTP 401 Unauthorized
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -255,7 +255,7 @@
 **When** GET `/api/v1/doctor/documents?patientId={id}`
 **Then** HTTP 200 com `{ data: [], pagination: { total: 0 } }`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 

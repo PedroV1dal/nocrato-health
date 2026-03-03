@@ -12,16 +12,18 @@ documentos no banco de dados com audit trail.
 |--------|------|-----------|
 | POST | `/api/v1/doctor/upload` | Upload de arquivo via multipart/form-data para disco local |
 | POST | `/api/v1/doctor/documents` | Registra documento no banco após upload |
+| GET | `/api/v1/doctor/documents` | Lista documentos de um paciente com filtro por tipo e paginação |
 
 ## Arquivos principais
 
 | Arquivo | Responsabilidade |
 |---------|-----------------|
 | `document.module.ts` | Registra controller e service; exporta DocumentService para uso em outros módulos |
-| `document.controller.ts` | Handlers HTTP POST upload e POST documents; FileInterceptor com diskStorage |
-| `document.service.ts` | Queries Knex: validação de patient + insert em documents + event_log na transação |
+| `document.controller.ts` | Handlers HTTP: POST upload, POST documents, GET documents |
+| `document.service.ts` | Queries Knex: createDocument (transação) + listDocuments (paginação); exporta DOCUMENT_FIELDS |
 | `dto/create-document.dto.ts` | Zod schema para body de criação (patientId, type, fileUrl, fileName, etc.) |
-| `document.service.spec.ts` | Testes unitários do DocumentService — mock manual do Knex com transaction e builder |
+| `dto/list-documents.dto.ts` | Zod schema para query params de listagem (patientId obrigatório, type opcional, page, limit) |
+| `document.service.spec.ts` | Testes unitários do DocumentService — mock manual do Knex com transaction e builder encadeável |
 
 ## Tabelas envolvidas
 
@@ -53,6 +55,15 @@ Constante `DOCUMENT_FIELDS` exportada de `document.service.ts` para reutilizaç�
 - `appointmentId` é opcional — quando fornecido, NÃO é validado (MVP confia no caller)
 - Atomicidade: validação + insert documents + event_log dentro de `knex.transaction()`
 - Evento de audit trail: `event_type='document.uploaded'`, `actor_type='doctor'`, payload `{ documentId, patientId, type }`
+
+### Listagem de documentos (GET /documents)
+
+- Query params: `patientId` (obrigatório, UUID), `type?` (enum), `page` (default 1), `limit` (default 10, max 100)
+- `z.coerce.number()` obrigatório em page e limit (HTTP entrega strings)
+- WHERE `{ tenant_id, patient_id }` sempre aplicado ao builder base — isolamento garantido
+- Cross-tenant patientId retorna `data: []` naturalmente (nunca NotFoundException)
+- `builder.clone().count()` para total — não contamina builder de dados
+- Ordenação: `created_at DESC`
 
 ## Guards obrigatórios
 

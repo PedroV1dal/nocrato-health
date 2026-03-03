@@ -2,8 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   HttpCode,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -23,6 +25,7 @@ import { CurrentUser } from '@/common/decorators/current-user.decorator'
 import type { JwtPayload } from '@/modules/auth/strategies/jwt.strategy'
 import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 import { CreateDocumentSchema, CreateDocumentDto } from './dto/create-document.dto'
+import { ListDocumentsSchema, ListDocumentsDto } from './dto/list-documents.dto'
 
 @Controller('doctor')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -62,6 +65,15 @@ export class DocumentController {
       fileUrl: `/uploads/${tenantId}/${file.filename}`,
       fileName: file.originalname,
     }
+  }
+
+  // US-6.4: Listagem paginada de documentos de um paciente — patientId obrigatório via query
+  @Get('documents')
+  listDocuments(
+    @TenantId() tenantId: string,
+    @Query(new ZodValidationPipe(ListDocumentsSchema)) query: ListDocumentsDto,
+  ) {
+    return this.documentService.listDocuments(tenantId, query)
   }
 
   // US-6.3: Registrar documento no banco após upload

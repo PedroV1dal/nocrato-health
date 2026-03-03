@@ -2,6 +2,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common'
 import type { Knex } from 'knex'
 import { KNEX } from '@/database/knex.provider'
 import { CreateDocumentDto } from './dto/create-document.dto'
+import { ListDocumentsDto } from './dto/list-documents.dto'
 
 // Campos retornados em queries de documentos
 // Exclui tenant_id (interno), updated_at (não relevante para o response) e file_size_bytes/mime_type (internos)
@@ -64,5 +65,41 @@ export class DocumentService {
 
       return document
     })
+  }
+
+  // US-6.4: Listagem paginada de documentos de um paciente com filtro opcional por tipo
+  async listDocuments(
+    tenantId: string,
+    query: ListDocumentsDto,
+  ): Promise<{
+    data: Record<string, unknown>[]
+    pagination: { page: number; limit: number; total: number; totalPages: number }
+  }> {
+    const { patientId, type, page, limit } = query
+
+    const builder = this.knex('documents').where({ tenant_id: tenantId, patient_id: patientId })
+
+    if (type) {
+      builder.where({ type })
+    }
+
+    const countResult = await builder.clone().count('id as count').first()
+    const total = Number(countResult?.count ?? 0)
+
+    const data = await builder
+      .select([...DOCUMENT_FIELDS])
+      .orderBy('created_at', 'desc')
+      .offset((page - 1) * limit)
+      .limit(limit)
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    }
   }
 }
