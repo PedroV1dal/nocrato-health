@@ -23,15 +23,15 @@
 
 ---
 
-## US-7.2: Como paciente, quero ver horarios disponiveis do doutor
+## ✅ US-7.2: Como paciente, quero ver horarios disponiveis do doutor
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] `booking.controller.ts` → `GET /api/v1/public/booking/:slug/validate?token=X` — valida token + retorna dados do médico (`{ valid, doctor: { name, specialty }, tenant: { name, primaryColor, logoUrl } }`)
-- [ ] GET /api/v1/public/booking/:slug/slots?date=2024-01-15&token=X
-- [ ] Valida token, calcula slots (working_hours - appointments existentes)
-- [ ] Retorna [{ start: "08:00", end: "08:30" }, ...]
-- [ ] **Criterio:** Token validado e dados do médico retornados para o frontend exibir na booking page; slots corretos com horários ocupados removidos
+- [x] `booking.controller.ts` → `GET /api/v1/public/booking/:slug/validate?token=X` — valida token + retorna dados do médico (`{ valid, doctor: { name, specialty }, tenant: { name, primaryColor, logoUrl } }`)
+- [x] GET /api/v1/public/booking/:slug/slots?date=2024-01-15&token=X
+- [x] Valida token, calcula slots (working_hours - appointments existentes)
+- [x] Retorna [{ start: "08:00", end: "08:30" }, ...]
+- [x] **Criterio:** Token validado e dados do médico retornados para o frontend exibir na booking page; slots corretos com horários ocupados removidos
 
 ---
 

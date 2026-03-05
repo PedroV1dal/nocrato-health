@@ -65,7 +65,7 @@
 **When** `GET /api/v1/public/booking/dr-silva/validate?token={token}`
 **Then** HTTP 200 com `{ valid: true, doctor: { name, specialty }, tenant: { name, primaryColor, logoUrl } }`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -77,7 +77,7 @@
 **When** `GET /api/v1/public/booking/dr-silva/validate?token={token_expirado}`
 **Then** HTTP 403 Forbidden com `{ valid: false, reason: "expired" }`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -89,7 +89,7 @@
 **When** `GET /api/v1/public/booking/dr-silva/validate?token={token_usado}`
 **Then** HTTP 403 Forbidden com `{ valid: false }`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -101,7 +101,7 @@
 **When** `GET /api/v1/public/booking/dr-silva/validate?token={token_de_dra_carvalho}`
 **Then** HTTP 403 Forbidden (slug não corresponde ao tenant do token)
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -113,7 +113,7 @@
 **When** `GET /api/v1/public/booking/dr-silva/slots?date=2025-01-15&token={token}`
 **Then** resposta inclui `08:00-08:30` mas **não** inclui `08:30-09:00`; formato `{ date, slots, timezone, durationMinutes }`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -125,7 +125,7 @@
 **When** `GET /api/v1/public/booking/dr-silva/slots?date={proximo_domingo}&token={token}`
 **Then** HTTP 200 com `{ slots: [] }`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -137,7 +137,7 @@
 **When** `GET /api/v1/public/booking/dr-silva/slots?date={hoje}&token={token}`
 **Then** slots das 08:00, 08:30, 09:00 e 10:00 são omitidos; apenas 10:30 em diante retorna
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
