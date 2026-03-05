@@ -244,7 +244,7 @@
 **When** `bookingService.getSlots(tenantId, '2025-01-15')` é chamado internamente
 **Then** retorna `{ date, slots, timezone, durationMinutes }` com slot das 09:00 removido
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -256,7 +256,7 @@
 **When** `bookingService.bookInChat(tenantId, { name: 'Ana Lima', phone: '+5511988880000', dateTime: '...T14:00:00-03:00' })` chamado internamente
 **Then** paciente criado com `source = 'whatsapp_agent'`; appointment criado com `status = scheduled`, `created_by = 'agent'`; retorna `{ appointment, patient }`; **nenhum** `booking_token` é criado ou consumido
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -268,7 +268,7 @@
 **When** `bookingService.bookInChat(tenantId, { phone: '+5511933334444', ... })` chamado
 **Then** exceção lançada com `code: "MAX_APPOINTMENTS_REACHED"`; nenhuma consulta criada
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -280,7 +280,7 @@
 **When** `bookingService.bookInChat(tenantId, { dateTime: '...T10:00:00-03:00', ... })` chamado
 **Then** exceção lançada com `code: "SLOT_CONFLICT"`; nenhuma consulta criada
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 

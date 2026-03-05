@@ -120,6 +120,32 @@ Arquivos enviados (`/uploads/{tenantId}/`) ficam no disco da instância Hetzner 
 
 ---
 
+### TD-12 — Duplicação da lógica de geração de slots entre getSlots e getSlotsInternal
+**Módulo:** `booking`
+**Identificado em:** US-7.4 (OBS-TL-1)
+**Prioridade:** P3
+
+`getSlots(slug, token, date)` e `getSlotsInternal(tenantId, date)` duplicam verbatim a lógica de: parse do dia da semana, geração de slots por período, busca de appointments ocupados, conversão UTC→local e filtragem de overlap e horários passados.
+
+**Impacto atual:** Nenhum — são dois pontos de entrada distintos (público e interno). Risco de drift se regras de slot mudarem (ex: buffer entre consultas).
+
+**Fix:** Extrair `_computeSlots(tenantId: string, date: string): Promise<GetSlotsResult>` como método privado compartilhado. `getSlots` e `getSlotsInternal` delegam para ele após suas respectivas etapas de validação.
+
+---
+
+### TD-13 — getSlotsInternal silencia doutor inativo (retorna slots vazios sem NotFoundException)
+**Módulo:** `booking`
+**Identificado em:** US-7.4 (OBS-TL-2)
+**Prioridade:** P2
+
+Quando `getSlotsInternal(tenantId, date)` é chamado para um tenant sem doutor ativo (onboarding incompleto ou doutor inativado), o método retorna `{ slots: [], timezone: 'America/Sao_Paulo', durationMinutes: 30 }` silenciosamente — fallbacks padrão em vez de NotFoundException.
+
+**Impacto atual:** O AgentModule (Epic 9) receberá resposta vazia sem saber o motivo, podendo confundir "agenda vazia" com "doutor inativo".
+
+**Fix:** Lançar `NotFoundException('Médico não encontrado ou inativo')` quando `doctor === null`, ou o AgentModule deve verificar status do doutor antes de chamar. Resolver ao implementar AgentModule no Epic 9.
+
+---
+
 ### TD-11 — EventEmitter2 sem retry (eventos de negócio podem ser perdidos)
 **Módulo:** `agent`
 **Identificado em:** ADR-014 / Auditoria pós-Epic 7

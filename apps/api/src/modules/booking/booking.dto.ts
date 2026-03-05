@@ -23,3 +23,15 @@ export const BookAppointmentSchema = z.object({
 })
 
 export type BookAppointmentDto = z.infer<typeof BookAppointmentSchema>
+
+// ---------------------------------------------------------------------------
+// US-7.4 — Book In-Chat (chamada interna do agent)
+// ---------------------------------------------------------------------------
+
+export const BookInChatSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().min(1),
+  dateTime: z.string().datetime({ offset: true }),
+})
+
+export type BookInChatDto = z.infer<typeof BookInChatSchema>

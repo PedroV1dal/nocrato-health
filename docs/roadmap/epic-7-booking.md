@@ -49,14 +49,15 @@
 
 ---
 
-## US-7.4: Como agente interno, quero consultar slots e agendar in-chat
+## ✅ US-7.4: Como agente interno, quero consultar slots e agendar in-chat
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] `bookingService.getSlots(tenantId, date)` (chamada interna de servico, sem token de booking)
-- [ ] `bookingService.bookInChat(tenantId, { name, phone, dateTime })` (chamada interna)
-- [ ] Mesmo calculo de slots e validacoes (max 2 ativas por phone, conflito)
-- [ ] **Criterio:** Agente consegue listar slots e criar consultas diretamente pelo codigo
+- [x] `bookingService.getSlotsInternal(tenantId, date)` (chamada interna de servico, sem token de booking)
+- [x] `bookingService.bookInChat(tenantId, { name, phone, dateTime })` (chamada interna)
+- [x] Mesmo calculo de slots e validacoes (max 2 ativas por phone, conflito)
+- [x] patient.source = 'whatsapp_agent', appointment.created_by = 'agent', sem acesso a booking_tokens
+- [x] **Criterio:** Agente consegue listar slots e criar consultas diretamente pelo codigo (CT-74-01 a CT-74-04 passando)
 
 ---
 

@@ -10,7 +10,7 @@ import {
 import type { Knex } from 'knex'
 import { KNEX } from '@/database/knex.provider'
 import { env } from '@/config/env'
-import type { BookAppointmentDto } from './booking.dto'
+import type { BookAppointmentDto, BookInChatDto } from './booking.dto'
 
 // ---------------------------------------------------------------------------
 // Return types
@@ -300,6 +300,213 @@ export class BookingService {
     }
 
     return { date, slots: finalSlots, timezone, durationMinutes: appointmentDuration }
+  }
+
+  // -------------------------------------------------------------------------
+  // getSlotsInternal (US-7.4) — mesma lógica de getSlots, mas sem token
+  // -------------------------------------------------------------------------
+
+  async getSlotsInternal(tenantId: string, date: string): Promise<GetSlotsResult> {
+    // 1. Buscar dados do doctor (working_hours, appointment_duration, timezone) diretamente por tenant_id
+    const doctor = await this.knex('doctors')
+      .where({ tenant_id: tenantId, status: 'active' })
+      .select(
+        this.knex.raw('working_hours as "workingHours"'),
+        this.knex.raw('appointment_duration as "appointmentDuration"'),
+        'timezone',
+      )
+      .first()
+
+    const workingHours: Record<string, Array<{ start: string; end: string }>> =
+      (doctor?.workingHours as Record<string, Array<{ start: string; end: string }>>) ?? {}
+    const appointmentDuration: number = (doctor?.appointmentDuration as number) ?? 30
+    const timezone: string = (doctor?.timezone as string) ?? 'America/Sao_Paulo'
+
+    // 2. Calcular dia da semana da date (sem timezone — data local)
+    const [year, month, day] = date.split('-').map(Number)
+    const d = new Date(year, month - 1, day)
+    const dayName = DAY_NAMES[d.getDay()]
+    const periods = workingHours[dayName] ?? []
+
+    // 3. Dia sem expediente
+    if (periods.length === 0) {
+      return { date, slots: [], timezone, durationMinutes: appointmentDuration }
+    }
+
+    // 4. Gerar todos os slots possíveis para os períodos do dia
+    const allSlots: SlotItem[] = []
+    for (const period of periods) {
+      let current = period.start
+      while (compareTime(addMinutes(current, appointmentDuration), period.end) <= 0) {
+        allSlots.push({ start: current, end: addMinutes(current, appointmentDuration) })
+        current = addMinutes(current, appointmentDuration)
+      }
+    }
+
+    // 5. Buscar appointments do dia para filtrar slots ocupados
+    const dayStart = `${date}T00:00:00.000Z`
+    const dayEnd = `${date}T23:59:59.999Z`
+
+    const appointments = await this.knex('appointments')
+      .where({ tenant_id: tenantId })
+      .whereNotIn('status', ['cancelled', 'no_show', 'rescheduled'])
+      .andWhereBetween('date_time', [dayStart, dayEnd])
+      .select(
+        this.knex.raw('date_time as "dateTime"'),
+        this.knex.raw('duration_minutes as "durationMinutes"'),
+      )
+
+    // Converter appointments UTC → hora local do doutor para comparação
+    type ApptRow = { dateTime: string; durationMinutes: number }
+    const occupiedRanges = (appointments as ApptRow[]).map((appt) => {
+      const startLocal = utcToLocalTime(appt.dateTime, timezone)
+      const endLocal = addMinutes(startLocal, appt.durationMinutes)
+      return { start: startLocal, end: endLocal }
+    })
+
+    // Filtrar slots que se sobrepõem a algum appointment (overlap)
+    const freeSlots = allSlots.filter((slot) => {
+      return !occupiedRanges.some(
+        (occ) =>
+          compareTime(occ.start, slot.end) < 0 && compareTime(occ.end, slot.start) > 0,
+      )
+    })
+
+    // 6. Se data=hoje no timezone do doutor, remover slots passados
+    const todayStr = todayInTimezone(timezone)
+    let finalSlots = freeSlots
+    if (date === todayStr) {
+      const now = nowLocalTime(timezone)
+      finalSlots = freeSlots.filter((slot) => compareTime(slot.end, now) > 0)
+    }
+
+    return { date, slots: finalSlots, timezone, durationMinutes: appointmentDuration }
+  }
+
+  // -------------------------------------------------------------------------
+  // bookInChat (US-7.4) — booking interno pelo agente WhatsApp (sem token)
+  // -------------------------------------------------------------------------
+
+  async bookInChat(
+    tenantId: string,
+    dto: BookInChatDto,
+  ): Promise<{
+    appointment: { id: string; dateTime: string; status: string }
+    patient: { name: string; phone: string }
+  }> {
+    return this.knex.transaction(async (trx) => {
+      // 1. Buscar doctor ativo do tenant
+      const doctor = await trx('doctors')
+        .where({ tenant_id: tenantId, status: 'active' })
+        .select(
+          'id',
+          trx.raw('appointment_duration as "appointmentDuration"'),
+        )
+        .first()
+
+      if (!doctor) {
+        throw new NotFoundException('Médico não encontrado ou inativo')
+      }
+
+      // 2. Verificar conflito de slot
+      const dateTimeUtc = new Date(dto.dateTime).toISOString()
+
+      const conflictResult = await trx('appointments')
+        .where({ tenant_id: tenantId })
+        .whereNotIn('status', ['cancelled', 'no_show', 'rescheduled'])
+        .where({ date_time: dateTimeUtc })
+        .count('id as count')
+        .first()
+
+      const conflictCount = Number(conflictResult?.count ?? 0)
+      if (conflictCount > 0) {
+        throw new ConflictException({ code: 'SLOT_CONFLICT', message: 'Horário não disponível' })
+      }
+
+      // 3. Verificar limite de 2 consultas ativas por phone
+      const activeCountResult = await trx('appointments')
+        .join('patients', function () {
+          this.on('patients.id', '=', 'appointments.patient_id').andOn(
+            'patients.tenant_id',
+            '=',
+            'appointments.tenant_id',
+          )
+        })
+        .where('appointments.tenant_id', tenantId)
+        .where('patients.phone', dto.phone)
+        .whereIn('appointments.status', ['scheduled', 'waiting'])
+        .count('appointments.id as count')
+        .first()
+
+      const activeCount = Number(activeCountResult?.count ?? 0)
+      if (activeCount >= 2) {
+        throw new UnprocessableEntityException({ code: 'MAX_APPOINTMENTS_REACHED' })
+      }
+
+      // 4. findOrCreate patient
+      let patient = await trx('patients')
+        .where({ phone: dto.phone, tenant_id: tenantId })
+        .select('id', 'name', 'phone')
+        .first()
+
+      if (!patient) {
+        const [created] = await trx('patients')
+          .insert({
+            tenant_id: tenantId,
+            name: dto.name,
+            phone: dto.phone,
+            source: 'whatsapp_agent',
+            status: 'active',
+          })
+          .returning(['id', 'name', 'phone'])
+        patient = created
+      }
+
+      const patientId: string = patient.id as string
+
+      // 5. INSERT appointment
+      const [appointment] = await trx('appointments')
+        .insert({
+          tenant_id: tenantId,
+          patient_id: patientId,
+          date_time: dateTimeUtc,
+          duration_minutes: (doctor.appointmentDuration as number) ?? 30,
+          status: 'scheduled',
+          created_by: 'agent',
+        })
+        .returning([
+          'id',
+          trx.raw('date_time as "dateTime"'),
+          'status',
+        ])
+
+      const appointmentId: string = appointment.id as string
+
+      // 6. INSERT event_log
+      await trx('event_log').insert({
+        tenant_id: tenantId,
+        event_type: 'appointment.created',
+        actor_type: 'agent',
+        payload: JSON.stringify({
+          appointmentId,
+          patientId,
+          source: 'whatsapp_agent',
+        }),
+      })
+
+      // 7. Retornar resultado (sem doctor, sem message — uso interno)
+      return {
+        appointment: {
+          id: appointmentId,
+          dateTime: appointment.dateTime as string,
+          status: appointment.status as string,
+        },
+        patient: {
+          name: patient.name as string,
+          phone: patient.phone as string,
+        },
+      }
+    })
   }
 
   // -------------------------------------------------------------------------
