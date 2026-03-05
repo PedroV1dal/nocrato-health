@@ -72,6 +72,7 @@ Pergunte-se:
 - Isso afeta um fluxo? → atualizar o arquivo em `docs/flows/`
 - Isso é uma decisão arquitetural nova? → adicionar ADR em `docs/architecture/decisions.md`
 - Isso afeta o roadmap? → atualizar o epic correspondente
+- Isso é uma simplificação consciente (débito técnico)? → registrar em `docs/tech-debt.md` com prioridade
 - Isso muda como um agente deve agir? → consultar `.claude/prompt-engineering.md` para verificar se alguma técnica deve ser adicionada/ajustada, depois atualizar `.claude/agents/{agente}.md`
 
 ---
@@ -219,6 +220,10 @@ Consulte `.claude/agents/qa.md` — seção "Playwright via MCP". Resumo: roda l
 
 Os epic docs referenciam o arquivo via `> **Casos de teste:** [docs/test-cases/epic-N.md](...)`.
 Gerados pela skill `/test-cases` antes da etapa de QA de cada US.
+
+### `docs/tech-debt.md`
+
+Registro centralizado de débitos técnicos com ID sequencial (`TD-NN`), módulo, US de origem e prioridade (P1/P2/P3). Atualizar ao identificar qualquer simplificação consciente. Resolver todos os P1 antes do Epic 11 (deploy).
 
 ### `.claude/`
 
