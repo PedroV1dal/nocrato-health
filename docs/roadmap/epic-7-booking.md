@@ -8,16 +8,18 @@
 | **Dependencies** | EPIC 5 (Gestao de Consultas) |
 | **User Stories** | 5 |
 
+> **Casos de teste:** [docs/test-cases/epic-7.md](../test-cases/epic-7.md)
+
 ---
 
-## US-7.1: Como agente interno, quero gerar um token de booking para enviar ao paciente
+## ✅ US-7.1: Como agente interno, quero gerar um token de booking para enviar ao paciente
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] `bookingService.generateToken(tenantId, phone?)` (chamada interna de servico)
-- [ ] Gera token (24h), salva em booking_tokens
-- [ ] Retorna { token, expiresAt, bookingUrl }
-- [ ] **Criterio:** Token gerado, valido por 24h, chamavel pelo agent.service
+- [x] `bookingService.generateToken(tenantId, phone?)` (chamada interna de servico)
+- [x] Gera token (24h), salva em booking_tokens
+- [x] Retorna { token, expiresAt, bookingUrl }
+- [x] **Criterio:** Token gerado, valido por 24h, chamavel pelo agent.service
 
 ---
 

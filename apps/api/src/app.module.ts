@@ -8,10 +8,11 @@ import { PatientModule } from './modules/patient/patient.module'
 import { AppointmentModule } from './modules/appointment/appointment.module'
 import { ClinicalNoteModule } from './modules/clinical-note/clinical-note.module'
 import { DocumentModule } from './modules/document/document.module'
+import { BookingModule } from './modules/booking/booking.module'
 import { HealthController } from './modules/health/health.controller'
 
 @Module({
-  imports: [DatabaseModule, AuthModule, InviteModule, AgencyModule, DoctorModule, PatientModule, AppointmentModule, ClinicalNoteModule, DocumentModule],
+  imports: [DatabaseModule, AuthModule, InviteModule, AgencyModule, DoctorModule, PatientModule, AppointmentModule, ClinicalNoteModule, DocumentModule, BookingModule],
   controllers: [HealthController],
 })
 export class AppModule {}
