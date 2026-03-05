@@ -1,8 +1,16 @@
 import * as crypto from 'crypto'
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common'
 import type { Knex } from 'knex'
 import { KNEX } from '@/database/knex.provider'
 import { env } from '@/config/env'
+import type { BookAppointmentDto } from './booking.dto'
 
 // ---------------------------------------------------------------------------
 // Return types
@@ -292,5 +300,176 @@ export class BookingService {
     }
 
     return { date, slots: finalSlots, timezone, durationMinutes: appointmentDuration }
+  }
+
+  // -------------------------------------------------------------------------
+  // bookAppointment (US-7.3)
+  // -------------------------------------------------------------------------
+
+  async bookAppointment(
+    slug: string,
+    dto: BookAppointmentDto,
+  ): Promise<{
+    appointment: { id: string; dateTime: string; status: string }
+    patient: { name: string; phone: string }
+    doctor: { name: string; specialty: string | null }
+    message: string
+  }> {
+    return this.knex.transaction(async (trx) => {
+      // 1. Buscar tenant pelo slug
+      const tenant = await trx('tenants')
+        .where({ slug, status: 'active' })
+        .select('id', 'name')
+        .first()
+
+      if (!tenant) {
+        throw new NotFoundException('Tenant não encontrado')
+      }
+
+      const tenantId: string = tenant.id as string
+
+      // 2. Buscar token — cross-tenant protection: filtra por tenant_id
+      const bookingToken = await trx('booking_tokens')
+        .where({ token: dto.token, tenant_id: tenantId })
+        .select('id', 'used', trx.raw('expires_at as "expiresAt"'))
+        .first()
+
+      if (!bookingToken) {
+        throw new ForbiddenException('Token inválido')
+      }
+
+      // 3. Token já usado
+      if (bookingToken.used) {
+        throw new ForbiddenException('Token já utilizado')
+      }
+
+      // 4. Token expirado
+      if (new Date() > new Date(bookingToken.expiresAt as string)) {
+        throw new ForbiddenException('Token expirado')
+      }
+
+      // 5. Buscar doctor ativo do tenant
+      const doctor = await trx('doctors')
+        .where({ tenant_id: tenantId, status: 'active' })
+        .select(
+          'id',
+          'name',
+          'specialty',
+          trx.raw('appointment_duration as "appointmentDuration"'),
+          'status',
+        )
+        .first()
+
+      if (!doctor) {
+        throw new NotFoundException('Médico não encontrado ou inativo')
+      }
+
+      // 6. Verificar conflito de slot — NÃO marcar token como used antes dessa checagem
+      const dateTimeUtc = new Date(dto.dateTime).toISOString()
+
+      const conflictResult = await trx('appointments')
+        .where({ tenant_id: tenantId })
+        .whereNotIn('status', ['cancelled', 'no_show', 'rescheduled'])
+        .where({ date_time: dateTimeUtc })
+        .count('id as count')
+        .first()
+
+      const conflictCount = Number(conflictResult?.count ?? 0)
+      if (conflictCount > 0) {
+        throw new ConflictException({ code: 'SLOT_CONFLICT', message: 'Horário não disponível' })
+      }
+
+      // 7. Verificar limite de 2 consultas ativas por phone
+      const activeCountResult = await trx('appointments')
+        .join('patients', function () {
+          this.on('patients.id', '=', 'appointments.patient_id').andOn(
+            'patients.tenant_id',
+            '=',
+            'appointments.tenant_id',
+          )
+        })
+        .where('appointments.tenant_id', tenantId)
+        .where('patients.phone', dto.phone)
+        .whereIn('appointments.status', ['scheduled', 'waiting'])
+        .count('appointments.id as count')
+        .first()
+
+      const activeCount = Number(activeCountResult?.count ?? 0)
+      if (activeCount >= 2) {
+        throw new UnprocessableEntityException({ code: 'MAX_APPOINTMENTS_REACHED' })
+      }
+
+      // 8. findOrCreate patient
+      let patient = await trx('patients')
+        .where({ phone: dto.phone, tenant_id: tenantId })
+        .select('id', 'name', 'phone')
+        .first()
+
+      if (!patient) {
+        const [created] = await trx('patients')
+          .insert({
+            tenant_id: tenantId,
+            name: dto.name,
+            phone: dto.phone,
+            source: 'whatsapp_agent',
+            status: 'active',
+          })
+          .returning(['id', 'name', 'phone'])
+        patient = created
+      }
+
+      const patientId: string = patient.id as string
+
+      // 9. INSERT appointment
+      const [appointment] = await trx('appointments')
+        .insert({
+          tenant_id: tenantId,
+          patient_id: patientId,
+          date_time: dateTimeUtc,
+          duration_minutes: (doctor.appointmentDuration as number) ?? 30,
+          status: 'scheduled',
+          created_by: 'agent',
+        })
+        .returning([
+          'id',
+          trx.raw('date_time as "dateTime"'),
+          'status',
+        ])
+
+      const appointmentId: string = appointment.id as string
+
+      // 10. Marcar token como usado
+      await trx('booking_tokens').where({ id: bookingToken.id }).update({ used: true })
+
+      // 11. INSERT event_log
+      await trx('event_log').insert({
+        tenant_id: tenantId,
+        event_type: 'appointment.created',
+        actor_type: 'agent',
+        payload: JSON.stringify({
+          appointmentId,
+          patientId,
+          source: 'booking_link',
+        }),
+      })
+
+      // 12. Retornar resultado
+      return {
+        appointment: {
+          id: appointmentId,
+          dateTime: appointment.dateTime as string,
+          status: appointment.status as string,
+        },
+        patient: {
+          name: patient.name as string,
+          phone: patient.phone as string,
+        },
+        doctor: {
+          name: doctor.name as string,
+          specialty: (doctor.specialty as string | null) ?? null,
+        },
+        message: 'Consulta agendada com sucesso',
+      }
+    })
   }
 }

@@ -1,5 +1,16 @@
-import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common'
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common'
+import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 import { BookingService } from './booking.service'
+import { BookAppointmentSchema, type BookAppointmentDto } from './booking.dto'
 
 @Controller('public/booking/:slug')
 export class BookingController {
@@ -44,5 +55,20 @@ export class BookingController {
     }
 
     return this.bookingService.getSlots(slug, token, date)
+  }
+
+  /**
+   * POST /api/v1/public/booking/:slug/book
+   *
+   * Cria uma consulta a partir de um token válido.
+   * Rota pública — sem JwtAuthGuard / TenantGuard.
+   */
+  @Post('book')
+  @UsePipes(new ZodValidationPipe(BookAppointmentSchema))
+  async bookAppointment(
+    @Param('slug') slug: string,
+    @Body() dto: BookAppointmentDto,
+  ) {
+    return this.bookingService.bookAppointment(slug, dto)
   }
 }

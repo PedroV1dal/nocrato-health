@@ -158,7 +158,7 @@
 4. Verificar que `booking_tokens.used = true` após
 5. Verificar que paciente foi inserido com `source = 'whatsapp_agent'`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -170,7 +170,7 @@
 **When** `POST /api/v1/public/booking/dr-silva/book { phone: "+5511912345678", ... }`
 **Then** nenhum novo paciente é criado; appointment é vinculado ao paciente existente
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -182,7 +182,7 @@
 **When** `POST /api/v1/public/booking/dr-silva/book { dateTime: "...T10:00:00-03:00", ... }`
 **Then** HTTP 409 com `{ code: "SLOT_CONFLICT" }`; nenhum appointment criado; token **não** marcado como used
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -194,7 +194,7 @@
 **When** `POST /api/v1/public/booking/dr-silva/book { phone: "+5511911112222", ... }`
 **Then** HTTP 422 com `{ code: "MAX_APPOINTMENTS_REACHED" }`; booking rejeitado
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -206,7 +206,7 @@
 **When** `POST /api/v1/public/booking/dr-silva/book { token: "{token_expirado}", ... }`
 **Then** HTTP 403 Forbidden; nenhum appointment ou paciente criado
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -218,7 +218,7 @@
 **When** `POST /api/v1/public/booking/dr-silva/book { token: "{token_usado}", ... }`
 **Then** HTTP 403 Forbidden; nenhum appointment criado
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -230,7 +230,7 @@
 **When** `POST /api/v1/public/booking/dr-silva/book { ... }`
 **Then** HTTP 404 ou HTTP 422 com `{ code: "DOCTOR_UNAVAILABLE" }`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 

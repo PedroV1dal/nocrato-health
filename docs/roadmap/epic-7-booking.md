@@ -35,16 +35,17 @@
 
 ---
 
-## US-7.3: Como paciente, quero agendar uma consulta
+## ✅ US-7.3: Como paciente, quero agendar uma consulta
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] POST /api/v1/public/booking/:slug/book { token, name, phone, dateTime }
-- [ ] Valida token + rate limit + max 2 consultas ativas por phone
-- [ ] findOrCreate paciente + cria appointment (source: 'agent')
-- [ ] Marca token como used
-- [ ] Emite evento appointment.created
-- [ ] **Criterio:** Consulta criada, token consumido, conflito detectado
+- [x] POST /api/v1/public/booking/:slug/book { token, name, phone, dateTime }
+- [x] Valida token + rate limit + max 2 consultas ativas por phone
+- [x] findOrCreate paciente + cria appointment (source: 'agent')
+- [x] Marca token como used
+- [x] Insere event_log (appointment.created, actor_type: 'agent')
+- [x] dateTime validado como ISO 8601 com offset (z.string().datetime({ offset: true }))
+- [x] **Criterio:** Consulta criada, token consumido, conflito detectado (CT-73-01 a CT-73-07 passando)
 
 ---
 

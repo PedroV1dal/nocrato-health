@@ -18,6 +18,17 @@
  *  CT-72-05: getSlots happy path com slot ocupado → slot livre retornado
  *  CT-72-06: getSlots dia sem expediente → { slots: [] }
  *  CT-72-07: getSlots slots passados filtrados quando date=hoje (timezone UTC)
+ *
+ * US-7.3 — Criar consulta via link público (BookingService.bookAppointment)
+ *
+ * Casos de teste cobertos:
+ *  CT-73-01: happy path — novo paciente, slot livre → 201 com dados corretos
+ *  CT-73-02: paciente já existe (findOrCreate) → appointment vinculado ao existente
+ *  CT-73-03: conflito de slot → ConflictException com code: 'SLOT_CONFLICT'
+ *  CT-73-04: max 2 ativos → UnprocessableEntityException com code: 'MAX_APPOINTMENTS_REACHED'
+ *  CT-73-05: token expirado → ForbiddenException
+ *  CT-73-06: token já usado → ForbiddenException
+ *  CT-73-07: doutor inativo (status !== 'active') → NotFoundException
  */
 
 // Mockar env ANTES de qualquer import que o carregue transitivamente.
@@ -38,7 +49,12 @@ jest.mock('@/config/env', () => ({
 }))
 
 import { Test, TestingModule } from '@nestjs/testing'
-import { ForbiddenException, NotFoundException } from '@nestjs/common'
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common'
 import { BookingService } from './booking.service'
 import { KNEX } from '@/database/knex.provider'
 
@@ -594,5 +610,386 @@ describe('BookingService — getSlots', () => {
     // Slot 00:00-00:30 deve ter sido filtrado (já passou — são mais de 00:30 UTC agora)
     // Em casos raríssimos (execução exata às 00:00 UTC), o teste pode flaky — aceitável.
     expect(result.slots).toHaveLength(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Suite: bookAppointment (CT-73-01 a CT-73-07)
+// ---------------------------------------------------------------------------
+
+describe('BookingService — bookAppointment', () => {
+  let service: BookingService
+
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  const buildService = async (mockKnex: jest.Mock) => {
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        BookingService,
+        { provide: KNEX, useValue: mockKnex },
+      ],
+    }).compile()
+    return moduleRef.get<BookingService>(BookingService)
+  }
+
+  // Fixtures compartilhados
+  const SLUG = TENANT_SLUG
+  const VALID_TOKEN = 'valid-token-64chars'
+  const DATE_TIME = '2025-06-10T09:00:00-03:00' // ISO com timezone
+  const DATE_TIME_UTC = new Date(DATE_TIME).toISOString()
+
+  const BASE_DTO = {
+    token: VALID_TOKEN,
+    name: 'João Silva',
+    phone: '+5511988887777',
+    dateTime: DATE_TIME,
+  }
+
+  const TENANT_ROW = { id: TENANT_ID, name: 'Clínica Silva' }
+  const TOKEN_ROW = {
+    id: 'token-uuid-1',
+    used: false,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1h no futuro
+  }
+  const DOCTOR_ROW = {
+    id: 'doctor-uuid-1',
+    name: 'Dr. Silva',
+    specialty: 'Cardiologia',
+    appointmentDuration: 30,
+    status: 'active',
+  }
+  const NEW_PATIENT_ROW = { id: 'patient-uuid-new', name: BASE_DTO.name, phone: BASE_DTO.phone }
+  const EXISTING_PATIENT_ROW = { id: 'patient-uuid-existing', name: 'João Existente', phone: BASE_DTO.phone }
+  const APPOINTMENT_ROW = { id: 'appt-uuid-1', dateTime: DATE_TIME_UTC, status: 'scheduled' }
+
+  /**
+   * Cria um builder encadeável para queries de SELECT (terminam em .first()).
+   */
+  function makeSelectBuilder(resolvedValue: unknown) {
+    const b: Record<string, jest.Mock> = {}
+    for (const m of ['where', 'select', 'whereNotIn', 'whereIn', 'andWhere', 'join', 'andOn', 'on']) {
+      b[m] = jest.fn().mockReturnThis()
+    }
+    b['first'] = jest.fn().mockResolvedValue(resolvedValue)
+    return b
+  }
+
+  /**
+   * Cria um builder encadeável para queries de COUNT (terminam em .first()).
+   */
+  function makeCountBuilder(count: number) {
+    const b: Record<string, jest.Mock> = {}
+    for (const m of ['where', 'whereNotIn', 'whereIn', 'andWhere', 'join']) {
+      b[m] = jest.fn().mockReturnThis()
+    }
+    b['count'] = jest.fn().mockReturnThis()
+    b['first'] = jest.fn().mockResolvedValue({ count: String(count) })
+    return b
+  }
+
+  /**
+   * Cria um builder para INSERT com .returning() terminal.
+   */
+  function makeInsertBuilder(rows: unknown[]) {
+    const insert = jest.fn().mockReturnThis()
+    const returning = jest.fn().mockResolvedValue(rows)
+    return { insert, returning, _builder: { insert, returning } }
+  }
+
+  /**
+   * Cria um builder para UPDATE (sem returning).
+   */
+  function makeUpdateBuilder() {
+    const b: Record<string, jest.Mock> = {}
+    b['where'] = jest.fn().mockReturnThis()
+    b['update'] = jest.fn().mockResolvedValue(1)
+    return b
+  }
+
+  /**
+   * Monta o mockTrx e o mockKnex completos para o happy path com novo paciente.
+   * Permite sobrescrever fixtures específicos para cenários de erro.
+   */
+  function buildBookingKnex(options: {
+    tenant?: unknown
+    token?: unknown
+    doctor?: unknown
+    conflictCount?: number
+    existingPatient?: unknown
+    newPatientRows?: unknown[]
+    appointmentRows?: unknown[]
+  } = {}) {
+    const {
+      tenant = TENANT_ROW,
+      token = TOKEN_ROW,
+      doctor = DOCTOR_ROW,
+      conflictCount = 0,
+      existingPatient = null, // null = novo paciente
+      newPatientRows = [NEW_PATIENT_ROW],
+      appointmentRows = [APPOINTMENT_ROW],
+    } = options
+
+    const mockTrx = jest.fn()
+    const mockRaw = jest.fn().mockImplementation((sql: string) => sql)
+
+    // Contadores por tabela para distinguir múltiplas chamadas à mesma tabela
+    const callCounts: Record<string, number> = {}
+
+    mockTrx.mockImplementation((table: string) => {
+      callCounts[table] = (callCounts[table] ?? 0) + 1
+      const call = callCounts[table]
+
+      if (table === 'tenants') {
+        return makeSelectBuilder(tenant)
+      }
+
+      if (table === 'booking_tokens') {
+        if (call === 1) {
+          // Primeiro SELECT para validar o token
+          return makeSelectBuilder(token)
+        }
+        // Segunda chamada: UPDATE SET used = true
+        return makeUpdateBuilder()
+      }
+
+      if (table === 'doctors') {
+        return makeSelectBuilder(doctor)
+      }
+
+      if (table === 'appointments') {
+        if (call === 1) {
+          // Verificação de conflito de slot (COUNT)
+          return makeCountBuilder(conflictCount)
+        }
+        // Segunda chamada: INSERT appointment
+        const { insert, returning } = makeInsertBuilder(appointmentRows)
+        return { insert, returning }
+      }
+
+      if (table === 'patients') {
+        if (call === 1) {
+          // Verificação de limite por phone (COUNT via JOIN — chamada vai para appointments)
+          // Na verdade o JOIN está em appointments; patients só é chamado para SELECT e INSERT
+          // SELECT existingPatient
+          return makeSelectBuilder(existingPatient)
+        }
+        // Segunda chamada: INSERT novo paciente (só quando existingPatient === null)
+        const { insert, returning } = makeInsertBuilder(newPatientRows)
+        return { insert, returning }
+      }
+
+      if (table === 'event_log') {
+        return { insert: jest.fn().mockResolvedValue([]) }
+      }
+
+      throw new Error(`Tabela inesperada no mockTrx: ${table}`)
+    })
+
+    ;(mockTrx as jest.Mock & { raw: jest.Mock }).raw = mockRaw
+
+    // O knex.transaction recebe um callback e o executa com mockTrx
+    const mockKnex = jest.fn() as jest.Mock & { transaction: jest.Mock; raw: jest.Mock }
+    mockKnex.transaction = jest.fn().mockImplementation(async (cb: (trx: jest.Mock) => Promise<unknown>) => cb(mockTrx))
+    mockKnex.raw = mockRaw
+
+    return { mockKnex, mockTrx }
+  }
+
+  /**
+   * Monta mockKnex com activeCount via JOIN em appointments (chamada separada da verificação de slot).
+   * Para o fluxo real: appointments é chamado 1x para conflito, 1x para JOIN activeCount.
+   * Aqui precisamos separar os dois via callCount.
+   */
+  function buildBookingKnexWithActiveCount(options: {
+    tenant?: unknown
+    token?: unknown
+    doctor?: unknown
+    conflictCount?: number
+    activeCount?: number
+    existingPatient?: unknown
+    newPatientRows?: unknown[]
+    appointmentRows?: unknown[]
+  } = {}) {
+    const {
+      tenant = TENANT_ROW,
+      token = TOKEN_ROW,
+      doctor = DOCTOR_ROW,
+      conflictCount = 0,
+      activeCount = 0,
+      existingPatient = null,
+      newPatientRows = [NEW_PATIENT_ROW],
+      appointmentRows = [APPOINTMENT_ROW],
+    } = options
+
+    const mockTrx = jest.fn()
+    const mockRaw = jest.fn().mockImplementation((sql: string) => sql)
+
+    const callCounts: Record<string, number> = {}
+
+    mockTrx.mockImplementation((table: string) => {
+      callCounts[table] = (callCounts[table] ?? 0) + 1
+      const call = callCounts[table]
+
+      if (table === 'tenants') return makeSelectBuilder(tenant)
+
+      if (table === 'booking_tokens') {
+        if (call === 1) return makeSelectBuilder(token)
+        return makeUpdateBuilder()
+      }
+
+      if (table === 'doctors') return makeSelectBuilder(doctor)
+
+      if (table === 'appointments') {
+        if (call === 1) {
+          // Conflito de slot — JOIN query de active count usa esta tabela como base
+          return makeCountBuilder(conflictCount)
+        }
+        if (call === 2) {
+          // activeCount query (JOIN com patients)
+          return makeCountBuilder(activeCount)
+        }
+        // INSERT appointment
+        const { insert, returning } = makeInsertBuilder(appointmentRows)
+        return { insert, returning }
+      }
+
+      if (table === 'patients') {
+        if (call === 1) return makeSelectBuilder(existingPatient)
+        const { insert, returning } = makeInsertBuilder(newPatientRows)
+        return { insert, returning }
+      }
+
+      if (table === 'event_log') {
+        return { insert: jest.fn().mockResolvedValue([]) }
+      }
+
+      throw new Error(`Tabela inesperada no mockTrx: ${table}`)
+    })
+
+    ;(mockTrx as jest.Mock & { raw: jest.Mock }).raw = mockRaw
+
+    const mockKnex = jest.fn() as jest.Mock & { transaction: jest.Mock; raw: jest.Mock }
+    mockKnex.transaction = jest.fn().mockImplementation(async (cb: (trx: jest.Mock) => Promise<unknown>) => cb(mockTrx))
+    mockKnex.raw = mockRaw
+
+    return { mockKnex, mockTrx }
+  }
+
+  // -------------------------------------------------------------------------
+  // CT-73-01: Happy path — novo paciente, slot livre → resposta com dados corretos
+  // -------------------------------------------------------------------------
+
+  it('CT-73-01: should create appointment with new patient and return correct response', async () => {
+    const { mockKnex } = buildBookingKnexWithActiveCount({
+      conflictCount: 0,
+      activeCount: 0,
+      existingPatient: null,
+      newPatientRows: [NEW_PATIENT_ROW],
+      appointmentRows: [APPOINTMENT_ROW],
+    })
+    service = await buildService(mockKnex)
+
+    const result = await service.bookAppointment(SLUG, BASE_DTO)
+
+    expect(result.message).toBe('Consulta agendada com sucesso')
+    expect(result.appointment.id).toBe(APPOINTMENT_ROW.id)
+    expect(result.appointment.status).toBe('scheduled')
+    expect(result.patient.name).toBe(NEW_PATIENT_ROW.name)
+    expect(result.patient.phone).toBe(NEW_PATIENT_ROW.phone)
+    expect(result.doctor.name).toBe(DOCTOR_ROW.name)
+    expect(result.doctor.specialty).toBe(DOCTOR_ROW.specialty)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-73-02: Paciente já existe → appointment vinculado ao existente
+  // -------------------------------------------------------------------------
+
+  it('CT-73-02: should link appointment to existing patient when phone matches', async () => {
+    const { mockKnex } = buildBookingKnexWithActiveCount({
+      conflictCount: 0,
+      activeCount: 0,
+      existingPatient: EXISTING_PATIENT_ROW,
+      appointmentRows: [APPOINTMENT_ROW],
+    })
+    service = await buildService(mockKnex)
+
+    const result = await service.bookAppointment(SLUG, BASE_DTO)
+
+    // Dados do paciente existente devem ser retornados
+    expect(result.patient.name).toBe(EXISTING_PATIENT_ROW.name)
+    expect(result.patient.phone).toBe(EXISTING_PATIENT_ROW.phone)
+    expect(result.appointment.id).toBe(APPOINTMENT_ROW.id)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-73-03: Conflito de slot → ConflictException com code: 'SLOT_CONFLICT'
+  // -------------------------------------------------------------------------
+
+  it('CT-73-03: should throw ConflictException with SLOT_CONFLICT when slot is taken', async () => {
+    const { mockKnex } = buildBookingKnex({ conflictCount: 1 })
+    service = await buildService(mockKnex)
+
+    const error = await service.bookAppointment(SLUG, BASE_DTO).catch((e) => e)
+    expect(error).toBeInstanceOf(ConflictException)
+    expect((error as ConflictException).getResponse()).toMatchObject({ code: 'SLOT_CONFLICT' })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-73-04: Max 2 consultas ativas → UnprocessableEntityException
+  // -------------------------------------------------------------------------
+
+  it('CT-73-04: should throw UnprocessableEntityException with MAX_APPOINTMENTS_REACHED when limit exceeded', async () => {
+    const { mockKnex } = buildBookingKnexWithActiveCount({ conflictCount: 0, activeCount: 2 })
+    service = await buildService(mockKnex)
+
+    const error = await service.bookAppointment(SLUG, BASE_DTO).catch((e) => e)
+    expect(error).toBeInstanceOf(UnprocessableEntityException)
+    expect((error as UnprocessableEntityException).getResponse()).toMatchObject({ code: 'MAX_APPOINTMENTS_REACHED' })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-73-05: Token expirado → ForbiddenException
+  // -------------------------------------------------------------------------
+
+  it('CT-73-05: should throw ForbiddenException when token is expired', async () => {
+    const expiredToken = {
+      id: 'token-uuid-1',
+      used: false,
+      expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1h atrás
+    }
+    const { mockKnex } = buildBookingKnex({ token: expiredToken })
+    service = await buildService(mockKnex)
+
+    await expect(service.bookAppointment(SLUG, BASE_DTO)).rejects.toThrow(ForbiddenException)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-73-06: Token já usado → ForbiddenException
+  // -------------------------------------------------------------------------
+
+  it('CT-73-06: should throw ForbiddenException when token is already used', async () => {
+    const usedToken = {
+      id: 'token-uuid-1',
+      used: true,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    }
+    const { mockKnex } = buildBookingKnex({ token: usedToken })
+    service = await buildService(mockKnex)
+
+    await expect(service.bookAppointment(SLUG, BASE_DTO)).rejects.toThrow(ForbiddenException)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-73-07: Doutor inativo → NotFoundException
+  // -------------------------------------------------------------------------
+
+  it('CT-73-07: should throw NotFoundException when doctor is inactive', async () => {
+    // A query filtra por status='active', então doutor inativo → DB retorna null
+    const { mockKnex } = buildBookingKnex({ doctor: null })
+    service = await buildService(mockKnex)
+
+    await expect(service.bookAppointment(SLUG, BASE_DTO)).rejects.toThrow(NotFoundException)
   })
 })
