@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common'
+import { EventEmitterModule } from '@nestjs/event-emitter'
 import { DatabaseModule } from './database/database.module'
+import { EventLogModule } from './modules/event-log/event-log.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { InviteModule } from './modules/invite/invite.module'
 import { AgencyModule } from './modules/agency/agency.module'
@@ -12,7 +14,20 @@ import { BookingModule } from './modules/booking/booking.module'
 import { HealthController } from './modules/health/health.controller'
 
 @Module({
-  imports: [DatabaseModule, AuthModule, InviteModule, AgencyModule, DoctorModule, PatientModule, AppointmentModule, ClinicalNoteModule, DocumentModule, BookingModule],
+  imports: [
+    EventEmitterModule.forRoot(),
+    DatabaseModule,
+    EventLogModule,
+    AuthModule,
+    InviteModule,
+    AgencyModule,
+    DoctorModule,
+    PatientModule,
+    AppointmentModule,
+    ClinicalNoteModule,
+    DocumentModule,
+    BookingModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

@@ -8,7 +8,9 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common'
 import type { Knex } from 'knex'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { KNEX } from '@/database/knex.provider'
+import { EventLogService } from '@/modules/event-log/event-log.service'
 import { env } from '@/config/env'
 import type { BookAppointmentDto, BookInChatDto } from './booking.dto'
 
@@ -88,7 +90,11 @@ function todayInTimezone(timezone: string): string {
 
 @Injectable()
 export class BookingService {
-  constructor(@Inject(KNEX) private readonly knex: Knex) {}
+  constructor(
+    @Inject(KNEX) private readonly knex: Knex,
+    private readonly eventEmitter: EventEmitter2,
+    private readonly eventLogService: EventLogService,
+  ) {}
 
   // -------------------------------------------------------------------------
   // generateToken (US-7.1 — não alterar)
@@ -482,19 +488,23 @@ export class BookingService {
 
       const appointmentId: string = appointment.id as string
 
-      // 6. INSERT event_log
-      await trx('event_log').insert({
-        tenant_id: tenantId,
-        event_type: 'appointment.created',
-        actor_type: 'agent',
-        payload: JSON.stringify({
-          appointmentId,
-          patientId,
-          source: 'whatsapp_agent',
-        }),
+      // 6. Registrar evento no event_log via EventLogService (audit trail)
+      await this.eventLogService.append(tenantId, 'appointment.created', 'agent', null, {
+        appointmentId,
+        patientId,
+        source: 'whatsapp_agent',
       })
 
-      // 7. Retornar resultado (sem doctor, sem message — uso interno)
+      // 7. Emitir evento via EventEmitter2 para notificação WhatsApp (US-9.4)
+      this.eventEmitter.emit('appointment.created', {
+        tenantId,
+        patientId,
+        phone: dto.phone,
+        dateTime: dateTimeUtc,
+        patientName: patient.name as string,
+      })
+
+      // 8. Retornar resultado (sem doctor, sem message — uso interno)
       return {
         appointment: {
           id: appointmentId,
@@ -648,16 +658,20 @@ export class BookingService {
       // 10. Marcar token como usado
       await trx('booking_tokens').where({ id: bookingToken.id }).update({ used: true })
 
-      // 11. INSERT event_log
-      await trx('event_log').insert({
-        tenant_id: tenantId,
-        event_type: 'appointment.created',
-        actor_type: 'agent',
-        payload: JSON.stringify({
-          appointmentId,
-          patientId,
-          source: 'booking_link',
-        }),
+      // 11. Registrar evento no event_log via EventLogService (audit trail)
+      await this.eventLogService.append(tenantId, 'appointment.created', 'agent', null, {
+        appointmentId,
+        patientId,
+        source: 'booking_link',
+      })
+
+      // 11b. Emitir evento via EventEmitter2 para notificação WhatsApp (US-9.4)
+      this.eventEmitter.emit('appointment.created', {
+        tenantId,
+        patientId,
+        phone: dto.phone,
+        dateTime: dateTimeUtc,
+        patientName: patient.name as string,
       })
 
       // 12. Retornar resultado

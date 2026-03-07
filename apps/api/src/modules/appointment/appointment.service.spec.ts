@@ -26,8 +26,17 @@ jest.mock('@/config/env', () => ({
 }))
 
 import { Test, TestingModule } from '@nestjs/testing'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { AppointmentService } from './appointment.service'
+import { EventLogService } from '@/modules/event-log/event-log.service'
 import { KNEX } from '@/database/knex.provider'
+
+// ---------------------------------------------------------------------------
+// Shared mocks for EventEmitter2 and EventLogService
+// ---------------------------------------------------------------------------
+
+const mockEventEmitter = { emit: jest.fn() }
+const mockEventLogService = { append: jest.fn().mockResolvedValue(undefined) }
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -97,11 +106,14 @@ describe('AppointmentService', () => {
 
   beforeEach(async () => {
     mockKnex = jest.fn()
+    jest.clearAllMocks()
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         AppointmentService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 
@@ -485,7 +497,7 @@ describe('AppointmentService — createAppointment', () => {
     insertedAppointment?: Record<string, unknown>
   }) => {
     const {
-      patient = { id: PATIENT_ID },
+      patient = { id: PATIENT_ID, name: 'João Silva', phone: '11999990000' },
       doctor = { appointment_duration: DURATION },
       conflict = null,
       insertedAppointment = makeCreatedAppointment(),
@@ -523,11 +535,7 @@ describe('AppointmentService — createAppointment', () => {
       returning: mockReturning,
     }
 
-    // Builder para insert de event_log
-    const eventLogBuilder = {
-      insert: jest.fn().mockResolvedValue([{ id: 'event-uuid-1' }]),
-    }
-
+    // Nota: event_log NÃO é roteado no trx — o service delega ao EventLogService.append()
     // Contador para diferenciar a primeira chamada a 'appointments' (conflito)
     // da segunda (insert) dentro da transação
     let appointmentsCallCount = 0
@@ -535,7 +543,6 @@ describe('AppointmentService — createAppointment', () => {
     const trx = jest.fn().mockImplementation((table: string) => {
       if (table === 'patients') return patientBuilder
       if (table === 'doctors') return doctorBuilder
-      if (table === 'event_log') return eventLogBuilder
       if (table === 'appointments') {
         appointmentsCallCount++
         // 1ª chamada = query de conflito; 2ª chamada = insert
@@ -544,10 +551,11 @@ describe('AppointmentService — createAppointment', () => {
       throw new Error(`Tabela inesperada no mock: ${table}`)
     })
 
-    return { trx, patientBuilder, doctorBuilder, conflictBuilder, appointmentInsertBuilder, eventLogBuilder }
+    return { trx, patientBuilder, doctorBuilder, conflictBuilder, appointmentInsertBuilder }
   }
 
   beforeEach(async () => {
+    jest.clearAllMocks()
     // Cria o mock como objeto com `.transaction` já presente para evitar erro TS2339
     const transactionMock = jest.fn()
     mockKnex = Object.assign(jest.fn(), { transaction: transactionMock }) as jest.Mock & {
@@ -558,6 +566,8 @@ describe('AppointmentService — createAppointment', () => {
       providers: [
         AppointmentService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 
@@ -610,25 +620,61 @@ describe('AppointmentService — createAppointment', () => {
     )
   })
 
-  it('CT-52-01c: should insert event_log entry on success', async () => {
-    const { trx, eventLogBuilder } = createMockTrx({})
+  it('CT-52-01c: should call eventLogService.append on success', async () => {
+    const { trx } = createMockTrx({})
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
     const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
     await service.createAppointment(TENANT_ID, dto)
 
-    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
+    expect(mockEventLogService.append).toHaveBeenCalledWith(
+      TENANT_ID,
+      'appointment.created',
+      'doctor',
+      null,
       expect.objectContaining({
-        tenant_id: TENANT_ID,
-        event_type: 'appointment.created',
-        actor_type: 'doctor',
-        payload: expect.objectContaining({
-          appointment_id: APPOINTMENT_ID,
-          patient_id: PATIENT_ID,
-          created_by: 'doctor',
-        }),
+        appointment_id: APPOINTMENT_ID,
+        patient_id: PATIENT_ID,
+        created_by: 'doctor',
       }),
+    )
+  })
+
+  it('CT-52-01d: should emit appointment.created event with tenantId and patientId', async () => {
+    const { trx } = createMockTrx({})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+    await service.createAppointment(TENANT_ID, dto)
+
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+      'appointment.created',
+      expect.objectContaining({
+        tenantId: expect.any(String),
+        patientId: expect.any(String),
+      }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-91-05: Edge case — phone null não deve lançar exceção
+  // -------------------------------------------------------------------------
+
+  it('CT-91-05: should not throw when patient phone is null', async () => {
+    const { trx } = createMockTrx({
+      patient: { id: PATIENT_ID, name: 'João Silva', phone: null },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    const dto = { patientId: PATIENT_ID, dateTime: DATE_TIME, durationMinutes: DURATION }
+
+    await expect(service.createAppointment(TENANT_ID, dto)).resolves.toBeDefined()
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+      'appointment.created',
+      expect.objectContaining({ tenantId: TENANT_ID, patientId: PATIENT_ID }),
     )
   })
 
@@ -814,7 +860,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
   const createMockTrxNormal = (opts: {
     existing?: Record<string, unknown> | null
     updated?: Record<string, unknown>
-    patient?: { portal_access_code: string | null } | null
+    patient?: { portal_access_code: string | null; phone?: string } | null
   }) => {
     const {
       existing = makeAppt('scheduled'),
@@ -841,9 +887,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
       where: jest.fn().mockReturnThis(),
       update: jest.fn().mockResolvedValue(1),
     }
-    const eventLogBuilder = {
-      insert: jest.fn().mockResolvedValue([{ id: 'evt-uuid' }]),
-    }
+    // Nota: event_log NÃO é roteado no trx — o service delega ao EventLogService.append()
 
     let apptCalls = 0
     let patientCalls = 0
@@ -856,11 +900,10 @@ describe('AppointmentService — updateAppointmentStatus', () => {
         patientCalls++
         return patientCalls === 1 ? patientSelectBuilder : patientUpdateBuilder
       }
-      if (table === 'event_log') return eventLogBuilder
       throw new Error(`Tabela inesperada no mock: ${table}`)
     })
 
-    return { trx, apptSelectBuilder, apptUpdateBuilder, patientSelectBuilder, patientUpdateBuilder, eventLogBuilder }
+    return { trx, apptSelectBuilder, apptUpdateBuilder, patientSelectBuilder, patientUpdateBuilder }
   }
 
   /**
@@ -907,9 +950,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
       update: jest.fn().mockReturnThis(),
       returning: jest.fn().mockResolvedValue([updatedOriginal]),
     }
-    const eventLogBuilder = {
-      insert: jest.fn().mockResolvedValue([{ id: 'evt-uuid' }]),
-    }
+    // Nota: event_log NÃO é roteado no trx — o service delega ao EventLogService.append()
 
     let apptCalls = 0
     const trx = jest.fn().mockImplementation((table: string) => {
@@ -920,14 +961,14 @@ describe('AppointmentService — updateAppointmentStatus', () => {
         if (apptCalls === 3) return insertBuilder
         return updateBuilder
       }
-      if (table === 'event_log') return eventLogBuilder
       throw new Error(`Tabela inesperada no mock: ${table}`)
     })
 
-    return { trx, selectBuilder, conflictBuilder, insertBuilder, updateBuilder, eventLogBuilder }
+    return { trx, selectBuilder, conflictBuilder, insertBuilder, updateBuilder }
   }
 
   beforeEach(async () => {
+    jest.clearAllMocks()
     const transactionMock = jest.fn()
     mockKnex = Object.assign(jest.fn(), {
       transaction: transactionMock,
@@ -938,6 +979,8 @@ describe('AppointmentService — updateAppointmentStatus', () => {
       providers: [
         AppointmentService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 
@@ -972,20 +1015,35 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     expect(apptSelectBuilder.where).toHaveBeenCalledWith({ id: APPOINTMENT_ID, tenant_id: TENANT_ID })
   })
 
-  it('CT-53-01c: should record actor_id in event_log', async () => {
-    const { trx, eventLogBuilder } = createMockTrxNormal({})
+  it('CT-53-01c: should call eventLogService.append with actor_id for status_changed', async () => {
+    const { trx } = createMockTrxNormal({})
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
     await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'waiting' }, ACTOR_ID)
 
-    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
+    expect(mockEventLogService.append).toHaveBeenCalledWith(
+      TENANT_ID,
+      'appointment.status_changed',
+      'doctor',
+      ACTOR_ID,
+      expect.objectContaining({ old_status: 'scheduled', new_status: 'waiting' }),
+    )
+  })
+
+  it('CT-53-01d: should emit appointment.status_changed event on scheduled → waiting', async () => {
+    const { trx } = createMockTrxNormal({})
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'waiting' }, ACTOR_ID)
+
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+      'appointment.status_changed',
       expect.objectContaining({
-        tenant_id: TENANT_ID,
-        event_type: 'appointment.status_changed',
-        actor_type: 'doctor',
-        actor_id: ACTOR_ID,
-        payload: expect.objectContaining({ old_status: 'scheduled', new_status: 'waiting' }),
+        tenantId: expect.any(String),
+        oldStatus: expect.any(String),
+        newStatus: expect.any(String),
       }),
     )
   })
@@ -1007,6 +1065,14 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     expect(apptUpdateBuilder.update).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'in_progress', started_at: expect.anything() }),
     )
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+      'appointment.status_changed',
+      expect.objectContaining({
+        tenantId: expect.any(String),
+        oldStatus: expect.any(String),
+        newStatus: expect.any(String),
+      }),
+    )
   })
 
   // -------------------------------------------------------------------------
@@ -1016,10 +1082,10 @@ describe('AppointmentService — updateAppointmentStatus', () => {
   it('CT-53-03: should not generate portal_access_code when patient already has one', async () => {
     const existing = makeAppt('in_progress')
     const updated = makeAppt('completed', { status: 'completed', completed_at: new Date() })
-    const { trx, patientUpdateBuilder, eventLogBuilder } = createMockTrxNormal({
+    const { trx, patientUpdateBuilder } = createMockTrxNormal({
       existing,
       updated,
-      patient: { portal_access_code: 'ABC-1234-XYZ' },
+      patient: { portal_access_code: 'ABC-1234-XYZ', phone: '11999990000' },
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
@@ -1027,8 +1093,12 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
 
     expect(patientUpdateBuilder.update).not.toHaveBeenCalled()
-    expect(eventLogBuilder.insert).not.toHaveBeenCalledWith(
-      expect.objectContaining({ event_type: 'patient.portal_activated' }),
+    expect(mockEventLogService.append).not.toHaveBeenCalledWith(
+      TENANT_ID,
+      'patient.portal_activated',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
     )
   })
 
@@ -1057,25 +1127,25 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     )
   })
 
-  it('CT-53-04b: should emit patient.portal_activated event on first completion', async () => {
+  it('CT-53-04b: should call eventLogService.append for patient.portal_activated on first completion', async () => {
     const existing = makeAppt('in_progress')
     const updated = makeAppt('completed', { status: 'completed', completed_at: new Date() })
-    const { trx, eventLogBuilder } = createMockTrxNormal({
+    const { trx } = createMockTrxNormal({
       existing,
       updated,
-      patient: { portal_access_code: null },
+      patient: { portal_access_code: null, phone: '11999990000' },
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
     await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
 
-    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event_type: 'patient.portal_activated',
-        actor_type: 'doctor',
-        actor_id: ACTOR_ID,
-      }),
+    expect(mockEventLogService.append).toHaveBeenCalledWith(
+      TENANT_ID,
+      'patient.portal_activated',
+      'doctor',
+      ACTOR_ID,
+      expect.objectContaining({ patient_id: PATIENT_ID }),
     )
   })
 
@@ -1105,6 +1175,20 @@ describe('AppointmentService — updateAppointmentStatus', () => {
       expect.objectContaining({
         status: 'cancelled',
         cancellation_reason: 'Paciente cancelou',
+      }),
+    )
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+      'appointment.status_changed',
+      expect.objectContaining({
+        tenantId: expect.any(String),
+        oldStatus: expect.any(String),
+        newStatus: expect.any(String),
+      }),
+    )
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+      'appointment.cancelled',
+      expect.objectContaining({
+        tenantId: expect.any(String),
       }),
     )
   })
@@ -1137,14 +1221,14 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     })
   })
 
-  it('CT-53-07b: should emit two event_log entries for rescheduled', async () => {
+  it('CT-53-07b: should call eventLogService.append twice for rescheduled', async () => {
     const existing = makeAppt('scheduled')
     const newAppt = makeAppt('scheduled', { id: 'new-appt-uuid' })
     const updatedOriginal = makeAppt('rescheduled', {
       status: 'rescheduled',
       rescheduled_to_id: 'new-appt-uuid',
     })
-    const { trx, eventLogBuilder } = createMockTrxRescheduled({ existing, newAppointment: newAppt, updatedOriginal })
+    const { trx } = createMockTrxRescheduled({ existing, newAppointment: newAppt, updatedOriginal })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
@@ -1155,12 +1239,20 @@ describe('AppointmentService — updateAppointmentStatus', () => {
       ACTOR_ID,
     )
 
-    expect(eventLogBuilder.insert).toHaveBeenCalledTimes(2)
-    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ event_type: 'appointment.rescheduled' }),
+    expect(mockEventLogService.append).toHaveBeenCalledTimes(2)
+    expect(mockEventLogService.append).toHaveBeenCalledWith(
+      TENANT_ID,
+      'appointment.rescheduled',
+      'doctor',
+      ACTOR_ID,
+      expect.any(Object),
     )
-    expect(eventLogBuilder.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ event_type: 'appointment.created' }),
+    expect(mockEventLogService.append).toHaveBeenCalledWith(
+      TENANT_ID,
+      'appointment.created',
+      'doctor',
+      ACTOR_ID,
+      expect.any(Object),
     )
   })
 
@@ -1321,11 +1413,14 @@ describe('AppointmentService — getAppointmentDetail', () => {
 
   beforeEach(async () => {
     mockKnex = jest.fn()
+    jest.clearAllMocks()
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         AppointmentService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 
@@ -1555,11 +1650,14 @@ describe('AppointmentService — getDoctorDashboard', () => {
 
   beforeEach(async () => {
     mockKnex = jest.fn()
+    jest.clearAllMocks()
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         AppointmentService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 

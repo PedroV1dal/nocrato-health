@@ -8,17 +8,19 @@
 | **Dependencies** | EPIC 7 (Agendamento Publico), EPIC 8 (Configuracoes & Agente) |
 | **User Stories** | 4 |
 
+> **Casos de teste:** [docs/test-cases/epic-9.md](../test-cases/epic-9.md)
+
 ---
 
-## US-9.1: Como sistema, quero registrar eventos internos e reagir a eles
+## ✅ US-9.1: Como sistema, quero registrar eventos internos e reagir a eles
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] Configurar `@nestjs/event-emitter` no `app.module.ts`
-- [ ] `appointment.service.ts` → emite `appointment.status_changed`, `appointment.cancelled`
-- [ ] `patient.service.ts` → emite `patient.portal_activated`
-- [ ] `event-log.service.ts` → continua fazendo append no banco para audit trail
-- [ ] **Criterio:** Eventos emitidos e auditados automaticamente nas acoes relevantes
+- [x] Configurar `@nestjs/event-emitter` no `app.module.ts`
+- [x] `appointment.service.ts` → emite `appointment.status_changed`, `appointment.cancelled`
+- [x] `patient.service.ts` → emite `patient.portal_activated`
+- [x] `event-log.service.ts` → continua fazendo append no banco para audit trail
+- [x] **Criterio:** Eventos emitidos e auditados automaticamente nas acoes relevantes
 
 ---
 

@@ -32,8 +32,13 @@ jest.mock('@/config/env', () => ({
 
 import { Test, TestingModule } from '@nestjs/testing'
 import { ConflictException, NotFoundException } from '@nestjs/common'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { PatientService } from './patient.service'
+import { EventLogService } from '@/modules/event-log/event-log.service'
 import { KNEX } from '@/database/knex.provider'
+
+const mockEventEmitter = { emit: jest.fn() }
+const mockEventLogService = { append: jest.fn().mockResolvedValue(undefined) }
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -101,6 +106,8 @@ describe('PatientService', () => {
       providers: [
         PatientService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 
@@ -525,6 +532,8 @@ describe('PatientService — getPatientProfile', () => {
       providers: [
         PatientService,
         { provide: KNEX, useValue: mockKnexProfile },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 
@@ -866,6 +875,8 @@ describe('PatientService — createPatient', () => {
       providers: [
         PatientService,
         { provide: KNEX, useValue: mockKnexCreate },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 
@@ -1104,6 +1115,8 @@ describe('PatientService — updatePatient', () => {
       providers: [
         PatientService,
         { provide: KNEX, useValue: mockKnexUpdate },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 
@@ -1285,6 +1298,151 @@ describe('PatientService — updatePatient', () => {
       await expect(
         service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { name: 'X' }),
       ).rejects.not.toThrow(ConflictException)
+    })
+  })
+})
+
+// =============================================================================
+// US-9.1 — activatePortal
+// =============================================================================
+
+describe('PatientService — activatePortal', () => {
+  let service: PatientService
+  let mockKnexActivate: jest.Mock
+
+  const TENANT_ID_A = 'tenant-uuid-activate'
+  const PATIENT_ID_A = 'patient-uuid-activate'
+
+  const makePatientRow = (overrides: Record<string, unknown> = {}) => ({
+    id: PATIENT_ID_A,
+    phone: '11999990000',
+    portal_active: false,
+    portal_access_code: 'ABC-1234-XYZ',
+    ...overrides,
+  })
+
+  beforeEach(async () => {
+    jest.clearAllMocks()
+
+    mockKnexActivate = jest.fn()
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        PatientService,
+        { provide: KNEX, useValue: mockKnexActivate },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
+      ],
+    }).compile()
+
+    service = moduleRef.get<PatientService>(PatientService)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-91-03a: NotFoundException quando paciente não existe
+  // -------------------------------------------------------------------------
+
+  it('CT-91-03a: should throw NotFoundException when patient does not exist', async () => {
+    const selectBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(null),
+    }
+    mockKnexActivate.mockReturnValue(selectBuilder)
+
+    await expect(service.activatePortal(TENANT_ID_A, PATIENT_ID_A)).rejects.toThrow(
+      'Paciente não encontrado',
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-91-03b: portal já ativo → retorna sem emitir evento
+  // -------------------------------------------------------------------------
+
+  it('CT-91-03b: should return without emitting event when portal is already active', async () => {
+    const patient = makePatientRow({ portal_active: true })
+    const selectBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(patient),
+    }
+    mockKnexActivate.mockReturnValue(selectBuilder)
+
+    await service.activatePortal(TENANT_ID_A, PATIENT_ID_A)
+
+    expect(mockEventEmitter.emit).not.toHaveBeenCalled()
+    expect(mockEventLogService.append).not.toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-91-03c: portal inativo → ativa, appenda log, emite evento
+  // -------------------------------------------------------------------------
+
+  it('CT-91-03c: should update portal_active, append event_log, and emit event when inactive', async () => {
+    const patient = makePatientRow({ portal_active: false })
+
+    const selectBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(patient),
+    }
+    const updateBuilder = {
+      where: jest.fn().mockReturnThis(),
+      update: jest.fn().mockResolvedValue(1),
+    }
+
+    let callCount = 0
+    mockKnexActivate.mockImplementation((table: string) => {
+      if (table === 'patients') {
+        callCount++
+        return callCount === 1 ? selectBuilder : updateBuilder
+      }
+      throw new Error(`Tabela inesperada no mock: ${table}`)
+    })
+
+    await service.activatePortal(TENANT_ID_A, PATIENT_ID_A)
+
+    // UPDATE foi chamado com portal_active: true
+    expect(updateBuilder.update).toHaveBeenCalledWith({ portal_active: true })
+    expect(updateBuilder.where).toHaveBeenCalledWith({ id: PATIENT_ID_A, tenant_id: TENANT_ID_A })
+
+    // eventLogService.append foi chamado
+    expect(mockEventLogService.append).toHaveBeenCalledWith(
+      TENANT_ID_A,
+      'patient.portal_activated',
+      'system',
+      null,
+      expect.objectContaining({ patientId: PATIENT_ID_A, phone: patient.phone }),
+    )
+
+    // EventEmitter2.emit foi chamado
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+      'patient.portal_activated',
+      expect.objectContaining({
+        tenantId: TENANT_ID_A,
+        patientId: PATIENT_ID_A,
+        phone: patient.phone,
+      }),
+    )
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-91-03d: isolamento de tenant no SELECT
+  // -------------------------------------------------------------------------
+
+  it('CT-91-03d: should scope SELECT to tenant_id', async () => {
+    const selectBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(null),
+    }
+    mockKnexActivate.mockReturnValue(selectBuilder)
+
+    await expect(service.activatePortal(TENANT_ID_A, PATIENT_ID_A)).rejects.toThrow()
+
+    expect(selectBuilder.where).toHaveBeenCalledWith({
+      id: PATIENT_ID_A,
+      tenant_id: TENANT_ID_A,
     })
   })
 })

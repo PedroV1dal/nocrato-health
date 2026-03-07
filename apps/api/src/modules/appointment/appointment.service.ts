@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import type { Knex } from 'knex'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { KNEX } from '@/database/knex.provider'
+import { EventLogService } from '@/modules/event-log/event-log.service'
 import { ListAppointmentsDto } from './dto/list-appointments.dto'
 import { CreateAppointmentDto } from './dto/create-appointment.dto'
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto'
@@ -49,7 +51,11 @@ const APPOINTMENT_DETAIL_PATIENT_FIELDS = [
 
 @Injectable()
 export class AppointmentService {
-  constructor(@Inject(KNEX) private readonly knex: Knex) {}
+  constructor(
+    @Inject(KNEX) private readonly knex: Knex,
+    private readonly eventEmitter: EventEmitter2,
+    private readonly eventLogService: EventLogService,
+  ) {}
 
   // US-5.1: Listagem paginada de consultas com filtros opcionais
   async listAppointments(tenantId: string, dto: ListAppointmentsDto) {
@@ -177,11 +183,11 @@ export class AppointmentService {
   async createAppointment(tenantId: string, dto: CreateAppointmentDto) {
     const { patientId, dateTime, durationMinutes } = dto
 
-    return this.knex.transaction(async (trx) => {
+    const appointment = await this.knex.transaction(async (trx) => {
       // 1. Verificar se o paciente existe neste tenant — nunca vazar existência de outros tenants
       const patient = await trx('patients')
         .where({ id: patientId, tenant_id: tenantId })
-        .select('id')
+        .select('id', 'name', 'phone')
         .first()
 
       if (!patient) {
@@ -226,7 +232,7 @@ export class AppointmentService {
       }
 
       // 5. Inserir a nova consulta
-      const [appointment] = await trx('appointments')
+      const [created] = await trx('appointments')
         .insert({
           tenant_id: tenantId,
           patient_id: patientId,
@@ -246,21 +252,27 @@ export class AppointmentService {
           'created_at',
         ])
 
-      // 6. Registrar evento no event_log como audit trail (Epic 9 conectará via EventEmitter2)
-      await trx('event_log').insert({
-        tenant_id: tenantId,
-        event_type: 'appointment.created',
-        actor_type: 'doctor',
-        payload: {
-          appointment_id: appointment.id,
-          patient_id: patientId,
-          date_time: dateTime,
-          created_by: 'doctor',
-        },
+      // 6. Registrar evento no event_log via EventLogService (audit trail)
+      await this.eventLogService.append(tenantId, 'appointment.created', 'doctor', null, {
+        appointment_id: created.id,
+        patient_id: patientId,
+        date_time: dateTime,
+        created_by: 'doctor',
       })
 
-      return appointment
+      // 7. Emitir evento via EventEmitter2 (reativo — para agent/US-9.4)
+      this.eventEmitter.emit('appointment.created', {
+        tenantId,
+        patientId: patientId as string,
+        phone: patient.phone as string,
+        dateTime,
+        patientName: patient.name as string,
+      })
+
+      return created
     })
+
+    return appointment
   }
 
   // US-5.3: Atualiza o status de uma consulta seguindo a máquina de estados
@@ -349,10 +361,11 @@ export class AppointmentService {
 
       // 5. Lógica de ativação do portal do paciente na conclusão
       let portalActivated = false
+      let portalAccessCode: string | null = null
       if (dto.status === 'completed') {
         const patient = await trx('patients')
           .where({ id: appointment.patient_id, tenant_id: tenantId })
-          .select(['portal_access_code'])
+          .select(['portal_access_code', 'phone'])
           .first()
 
         if (!patient?.portal_access_code) {
@@ -361,15 +374,24 @@ export class AppointmentService {
             .where({ id: appointment.patient_id, tenant_id: tenantId })
             .update({ portal_access_code: code, portal_active: true })
 
-          await trx('event_log').insert({
-            tenant_id: tenantId,
-            event_type: 'patient.portal_activated',
-            actor_type: 'doctor',
-            actor_id: actorId,
-            payload: { patient_id: appointment.patient_id, portal_access_code: code },
+          await this.eventLogService.append(
+            tenantId,
+            'patient.portal_activated',
+            'doctor',
+            actorId,
+            { patient_id: appointment.patient_id, portal_access_code: code },
+          )
+
+          // Emitir evento via EventEmitter2 para que o agente envie o código ao paciente
+          this.eventEmitter.emit('patient.portal_activated', {
+            tenantId,
+            patientId: appointment.patient_id,
+            phone: patient?.phone as string | undefined,
+            portalAccessCode: code,
           })
 
           portalActivated = true
+          portalAccessCode = code
         }
       }
 
@@ -391,13 +413,37 @@ export class AppointmentService {
         payload.cancellation_reason = dto.cancellationReason
       }
 
-      await trx('event_log').insert({
-        tenant_id: tenantId,
-        event_type: 'appointment.status_changed',
-        actor_type: 'doctor',
-        actor_id: actorId,
+      await this.eventLogService.append(
+        tenantId,
+        'appointment.status_changed',
+        'doctor',
+        actorId,
         payload,
+      )
+
+      // 7. Emitir evento via EventEmitter2 para reatividade do agente
+      this.eventEmitter.emit('appointment.status_changed', {
+        tenantId,
+        appointmentId,
+        patientId: appointment.patient_id,
+        oldStatus: appointment.status,
+        newStatus: dto.status,
+        reason: dto.status === 'cancelled' ? dto.cancellationReason : undefined,
       })
+
+      // Emitir evento específico de cancelamento com dados para notificação WhatsApp
+      if (dto.status === 'cancelled') {
+        this.eventEmitter.emit('appointment.cancelled', {
+          tenantId,
+          appointmentId,
+          patientId: appointment.patient_id,
+          dateTime: appointment.date_time,
+          reason: dto.cancellationReason,
+        })
+      }
+
+      // Suprimir aviso de variável não usada
+      void portalAccessCode
 
       return updated
     })
@@ -483,32 +529,37 @@ export class AppointmentService {
         'created_at',
       ])
 
-    // Dois eventos no event_log
-    await trx('event_log').insert({
-      tenant_id: tenantId,
-      event_type: 'appointment.rescheduled',
-      actor_type: 'doctor',
-      actor_id: actorId,
-      payload: {
-        appointment_id: original.id,
-        patient_id: original.patient_id,
-        old_status: original.status,
-        rescheduled_to_id: newAppointment.id,
-        new_date_time: newDateTime,
-      },
+    // Dois eventos no event_log via EventLogService
+    await this.eventLogService.append(tenantId, 'appointment.rescheduled', 'doctor', actorId, {
+      appointment_id: original.id,
+      patient_id: original.patient_id,
+      old_status: original.status,
+      rescheduled_to_id: newAppointment.id,
+      new_date_time: newDateTime,
     })
 
-    await trx('event_log').insert({
-      tenant_id: tenantId,
-      event_type: 'appointment.created',
-      actor_type: 'doctor',
-      actor_id: actorId,
-      payload: {
-        appointment_id: newAppointment.id,
-        patient_id: original.patient_id,
-        date_time: newDateTime,
-        created_by: 'doctor',
-      },
+    await this.eventLogService.append(tenantId, 'appointment.created', 'doctor', actorId, {
+      appointment_id: newAppointment.id,
+      patient_id: original.patient_id,
+      date_time: newDateTime,
+      created_by: 'doctor',
+    })
+
+    // Emitir evento de status_changed para o original
+    this.eventEmitter.emit('appointment.status_changed', {
+      tenantId,
+      appointmentId: original.id,
+      patientId: original.patient_id,
+      oldStatus: original.status,
+      newStatus: 'rescheduled',
+    })
+
+    // Emitir evento de appointment.created para a nova consulta
+    this.eventEmitter.emit('appointment.created', {
+      tenantId,
+      appointmentId: newAppointment.id,
+      patientId: original.patient_id,
+      dateTime: newDateTime,
     })
 
     return { original: updatedOriginal, rescheduledTo: newAppointment }

@@ -222,6 +222,19 @@ Se o usuário desativar todos os dias na `ScheduleSection` de settings e salvar,
 
 ---
 
+### TD-17 — Duas implementações de ativação de portal
+**Módulo:** `patient`
+**Identificado em:** US-9.1
+**Prioridade:** P3
+
+`appointment.service.ts` ativa o portal do paciente diretamente dentro da transação quando o status muda para `completed` (actor_type='doctor'). `patient.service.ts` tem o método `activatePortal()` standalone para uso futuro do módulo `agent/` (actor_type='system'). São dois caminhos distintos que registram entradas diferentes no `event_log`.
+
+**Impacto atual:** Nenhum — os dois caminhos são mutuamente exclusivos no MVP. O risco é de inconsistência no `event_log` se o `agent/` precisar ativar portais que já foram ativados pelo fluxo do doutor.
+
+**Fix:** Consolidar em US futura se o `agent/` precisar de consistência no `event_log`. Extrair a lógica de geração de código e UPDATE do paciente para `patient.service.activatePortal()`, e chamá-la de dentro da transação do `appointment.service` via injeção do `PatientService`.
+
+---
+
 ## Resolvidos
 
 *(nenhum ainda)*

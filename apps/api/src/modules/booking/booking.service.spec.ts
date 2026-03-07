@@ -63,8 +63,13 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { BookingService } from './booking.service'
+import { EventLogService } from '@/modules/event-log/event-log.service'
 import { KNEX } from '@/database/knex.provider'
+
+const mockEventEmitter = { emit: jest.fn() }
+const mockEventLogService = { append: jest.fn().mockResolvedValue(undefined) }
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -128,6 +133,8 @@ describe('BookingService — generateToken', () => {
       providers: [
         BookingService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
 
@@ -313,6 +320,8 @@ describe('BookingService — validateToken', () => {
       providers: [
         BookingService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
     return moduleRef.get<BookingService>(BookingService)
@@ -461,6 +470,8 @@ describe('BookingService — getSlots', () => {
       providers: [
         BookingService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
     return moduleRef.get<BookingService>(BookingService)
@@ -637,6 +648,8 @@ describe('BookingService — bookAppointment', () => {
       providers: [
         BookingService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
     return moduleRef.get<BookingService>(BookingService)
@@ -788,10 +801,7 @@ describe('BookingService — bookAppointment', () => {
         return { insert, returning }
       }
 
-      if (table === 'event_log') {
-        return { insert: jest.fn().mockResolvedValue([]) }
-      }
-
+      // Nota: event_log NÃO é roteado no trx — o service delega ao EventLogService.append()
       throw new Error(`Tabela inesperada no mockTrx: ${table}`)
     })
 
@@ -869,10 +879,7 @@ describe('BookingService — bookAppointment', () => {
         return { insert, returning }
       }
 
-      if (table === 'event_log') {
-        return { insert: jest.fn().mockResolvedValue([]) }
-      }
-
+      // Nota: event_log NÃO é roteado no trx — o service delega ao EventLogService.append()
       throw new Error(`Tabela inesperada no mockTrx: ${table}`)
     })
 
@@ -1018,6 +1025,8 @@ describe('BookingService — getSlotsInternal + bookInChat (US-7.4)', () => {
       providers: [
         BookingService,
         { provide: KNEX, useValue: mockKnex },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
       ],
     }).compile()
     return moduleRef.get<BookingService>(BookingService)
@@ -1155,10 +1164,7 @@ describe('BookingService — getSlotsInternal + bookInChat (US-7.4)', () => {
         return { insert, returning }
       }
 
-      if (table === 'event_log') {
-        return { insert: jest.fn().mockResolvedValue([]) }
-      }
-
+      // Nota: event_log NÃO é roteado no trx — o service delega ao EventLogService.append()
       throw new Error(`Tabela inesperada no mockTrx CT-74-02: ${table}`)
     })
 

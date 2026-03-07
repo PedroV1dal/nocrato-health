@@ -1,6 +1,8 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import type { Knex } from 'knex'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { KNEX } from '@/database/knex.provider'
+import { EventLogService } from '@/modules/event-log/event-log.service'
 import { ListPatientsQueryDto } from './dto/list-patients.dto'
 import { CreatePatientDto } from './dto/create-patient.dto'
 import { UpdatePatientDto } from './dto/update-patient.dto'
@@ -55,7 +57,11 @@ const DOCUMENT_FIELDS = [
 
 @Injectable()
 export class PatientService {
-  constructor(@Inject(KNEX) private readonly knex: Knex) {}
+  constructor(
+    @Inject(KNEX) private readonly knex: Knex,
+    private readonly eventEmitter: EventEmitter2,
+    private readonly eventLogService: EventLogService,
+  ) {}
 
   // US-4.1: Listagem paginada de pacientes com busca por nome/telefone e filtro por status
   async listPatients(tenantId: string, dto: ListPatientsQueryDto) {
@@ -67,7 +73,7 @@ export class PatientService {
 
     // Filtros opcionais aplicados ANTES dos terminais (mutação in-place do Knex builder)
     if (search) {
-      const escaped = search.replace(/[%_\\]/g, '\\$&')
+      const escaped = search.replaceAll(/[%_\\]/g, String.raw`\$&`)
       query = query.andWhere((qb) =>
         qb.whereILike('name', `%${escaped}%`).orWhereILike('phone', `%${escaped}%`),
       )
@@ -213,5 +219,45 @@ export class PatientService {
       }
       throw error
     }
+  }
+
+  // US-9.1: Ativa o portal do paciente e emite evento para notificação WhatsApp
+  async activatePortal(tenantId: string, patientId: string): Promise<void> {
+    // 1. Buscar o paciente com isolamento de tenant obrigatório
+    const patient = await this.knex('patients')
+      .where({ id: patientId, tenant_id: tenantId })
+      .select(['id', 'phone', 'portal_active', 'portal_access_code'])
+      .first()
+
+    if (!patient) {
+      throw new NotFoundException('Paciente não encontrado')
+    }
+
+    // 2. Se já está ativo — idempotente, não emitir evento de duplicidade
+    if (patient.portal_active) {
+      return
+    }
+
+    // 3. Ativar portal
+    await this.knex('patients')
+      .where({ id: patientId, tenant_id: tenantId })
+      .update({ portal_active: true })
+
+    // 4. Registrar no event_log via EventLogService
+    await this.eventLogService.append(
+      tenantId,
+      'patient.portal_activated',
+      'system',
+      null,
+      { patientId, phone: patient.phone },
+    )
+
+    // 5. Emitir evento via EventEmitter2 (fire-and-forget)
+    this.eventEmitter.emit('patient.portal_activated', {
+      tenantId,
+      patientId,
+      phone: patient.phone as string,
+      portalAccessCode: patient.portal_access_code as string | null,
+    })
   }
 }
