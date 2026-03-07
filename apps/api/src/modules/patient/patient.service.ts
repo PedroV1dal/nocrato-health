@@ -7,6 +7,17 @@ import { ListPatientsQueryDto } from './dto/list-patients.dto'
 import { CreatePatientDto } from './dto/create-patient.dto'
 import { UpdatePatientDto } from './dto/update-patient.dto'
 
+// Tipo retornado em findByPhone e na listagem (campos públicos sem dados sensíveis)
+export interface PatientPublicRow {
+  id: string
+  name: string
+  phone: string
+  email: string | null
+  source: string
+  status: string
+  created_at: Date | string
+}
+
 // Campos públicos retornados na listagem — cpf e portal_access_code nunca são expostos
 const PUBLIC_PATIENT_FIELDS = [
   'id',
@@ -219,6 +230,19 @@ export class PatientService {
       }
       throw error
     }
+  }
+
+  // US-9.3: Busca paciente pelo telefone — retorna null se não encontrado (sem exceção)
+  async findByPhone(
+    tenantId: string,
+    phone: string,
+  ): Promise<PatientPublicRow | null> {
+    const patient = await this.knex('patients')
+      .where({ tenant_id: tenantId, phone })
+      .select(PUBLIC_PATIENT_FIELDS)
+      .first()
+
+    return (patient as PatientPublicRow | undefined) ?? null
   }
 
   // US-9.1: Ativa o portal do paciente e emite evento para notificação WhatsApp

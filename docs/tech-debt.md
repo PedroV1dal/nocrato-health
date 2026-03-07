@@ -235,14 +235,10 @@ Se o usuário desativar todos os dias na `ScheduleSection` de settings e salvar,
 
 ---
 
-### TD-18 — Type guard do webhook controller não valida `data.key` antes do cast
+### ~~TD-18 — Type guard do webhook controller não valida `data.key` antes do cast~~ ✅ RESOLVIDO em US-9.3
 **Módulo:** `agent`
 **Identificado em:** US-9.2 (OBS-TL-2 tech-lead)
-**Prioridade:** P2
-
-`agent.controller.ts` verifica `'event' in body` e `'data' in body` mas não valida `'key' in body.data` nem `'remoteJid' in body.data.key`. O optional chaining (`?.`) previne crash em US-9.2 (stub vazio), mas em US-9.3 um payload mal-formado chegaria em `handleMessage` com `remoteJid: undefined`, causando bug silencioso na resolução de tenant e lookup de paciente.
-
-**Fix:** Validar `payload.data?.key?.remoteJid` antes de chamar `handleMessage`. Alternativamente, validar o payload com um schema Zod no início do handler e retornar 200 silenciosamente se inválido. Resolver no início de US-9.3.
+**Resolvido em:** US-9.3 — adicionado guard `!payload.data?.key?.remoteJid` no controller antes de chamar `handleMessage`
 
 ---
 
@@ -257,9 +253,41 @@ Se o usuário desativar todos os dias na `ScheduleSection` de settings e salvar,
 
 ---
 
+### TD-20 — resolveTenantFromInstance não suporta múltiplos tenants ativos simultaneamente
+**Módulo:** `agent`
+**Identificado em:** US-9.3 (OBS-TL-4 tech-lead)
+**Prioridade:** P1
+
+`resolveTenantFromInstance()` busca o `agent_settings` com `enabled=true` mais recente por `updated_at`. Com dois ou mais doutores ativos, mensagens de pacientes de um tenant podem ser processadas com contexto de outro tenant — vazamento de dados entre tenants.
+
+**Fix:** Adicionar coluna `evolution_instance VARCHAR(100)` em `agent_settings`. Cada tenant configura sua própria instância. A resolução passa a ser `WHERE evolution_instance = env.EVOLUTION_INSTANCE`. Resolver antes de onboarding do segundo cliente.
+
+---
+
+### TD-21 — Erros da API OpenAI não são capturados com contexto de tenant/phone
+**Módulo:** `agent`
+**Identificado em:** US-9.3 (OBS-TL-1 tech-lead)
+**Prioridade:** P2
+
+As chamadas a `openai.chat.completions.create()` em `handleMessage` não têm `try/catch`. Em caso de erro (quota, timeout, rede), o NestJS retorna 500 mas o log não identifica tenant/phone afetado.
+
+**Fix:** Envolver o bloco do loop OpenAI em `try/catch` com log contextualizado e envio de mensagem de fallback ao paciente via `whatsappService.sendText`. Resolver antes do deploy.
+
+---
+
+### TD-22 — Instância OpenAI criada por mensagem recebida
+**Módulo:** `agent`
+**Identificado em:** US-9.3 (OBS-TL-2 tech-lead)
+**Prioridade:** P3
+
+`new OpenAI({ apiKey: env.OPENAI_API_KEY })` é instanciado dentro de `handleMessage` a cada chamada. Melhor instanciar como campo `private readonly openai` no constructor.
+
+---
+
 ## Resolvidos
 
-*(nenhum ainda)*
+### TD-18 — Type guard do webhook controller não validava `data.key.remoteJid`
+**Resolvido em:** US-9.3 — adicionado guard `!payload.data?.key?.remoteJid` no controller antes de chamar `handleMessage`
 
 ---
 

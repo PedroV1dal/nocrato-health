@@ -449,6 +449,55 @@ export class AppointmentService {
     })
   }
 
+  /**
+   * Cancela uma consulta em nome do agente WhatsApp.
+   * Usa actor_type='agent' e actor_id=null (sem UUID de usuário).
+   * Método dedicado para evitar passar string literal como actor_id UUID no evento.
+   */
+  async cancelByAgent(
+    tenantId: string,
+    appointmentId: string,
+    reason = 'Cancelado pelo paciente via WhatsApp',
+  ): Promise<void> {
+    const appointment = await this.knex('appointments')
+      .where({ id: appointmentId, tenant_id: tenantId })
+      .select('id', 'status', 'patient_id', 'date_time')
+      .first()
+
+    if (!appointment) {
+      throw new NotFoundException('Consulta não encontrada')
+    }
+
+    const cancellableStatuses = ['scheduled', 'waiting']
+    if (!cancellableStatuses.includes(appointment.status as string)) {
+      throw new BadRequestException(
+        `Não é possível cancelar uma consulta com status: ${appointment.status}`,
+      )
+    }
+
+    await this.knex('appointments').where({ id: appointmentId, tenant_id: tenantId }).update({
+      status: 'cancelled',
+      cancellation_reason: reason,
+      updated_at: this.knex.fn.now(),
+    })
+
+    await this.eventLogService.append(tenantId, 'appointment.cancelled', 'agent', null, {
+      appointment_id: appointmentId,
+      patient_id: appointment.patient_id,
+      old_status: appointment.status,
+      new_status: 'cancelled',
+      cancellation_reason: reason,
+    })
+
+    this.eventEmitter.emit('appointment.cancelled', {
+      tenantId,
+      appointmentId,
+      patientId: appointment.patient_id,
+      dateTime: appointment.date_time,
+      reason,
+    })
+  }
+
   // Lida com a transição → rescheduled: cria nova consulta e encerra a original
   private async _handleRescheduled(
     trx: Knex.Transaction,

@@ -37,20 +37,27 @@
 
 ---
 
-## US-9.3: Como agente, quero processar mensagens com LLM e executar acoes
+## ✅ US-9.3: Como agente, quero processar mensagens com LLM e executar acoes
 
 **Agentes:** `backend` + `dba` → `tech-lead` → `qa`
 
-- [ ] `conversation.service.ts` → CRUD da tabela `conversations` (estado por phone)
-- [ ] Migration `013_conversations.sql` → tabela com `messages` JSONB
-- [ ] `agent.service.ts` → handleMessage():
-  - Busca contexto do paciente via `patientService`
-  - Busca/cria conversa via `conversationService`
-  - Chama OpenAI SDK (gpt-4o-mini) com system prompt + historico + tools
-  - Executa tool_calls: `list_slots`, `book_appointment`, `generate_booking_link`, `cancel_appointment`
-  - Atualiza historico da conversa
+- [x] `conversation.service.ts` → CRUD da tabela `conversations` (getOrCreate + appendMessages com trim a 20 msgs)
+- [x] Migration `013_conversations.ts` → tabela com `messages` JSONB (já existia desde o setup inicial)
+- [x] `agent.service.ts` → handleMessage() completo:
+  - Resolve tenant via `agent_settings.enabled=true` (MVP instância única; TD registrado)
+  - Busca contexto do paciente via `patientService.findByPhone`
+  - Busca/cria conversa via `conversationService.getOrCreate`
+  - Monta system prompt com personalidade, regras, FAQ e contexto do paciente
+  - Chama OpenAI SDK (gpt-4o-mini) com loop de tool_calls (máx 5 iterações)
+  - Executa tools: `list_slots`, `book_appointment`, `generate_booking_link`, `cancel_appointment`
+  - `cancel_appointment` usa `appointmentService.cancelByAgent` (actor_type='agent', actor_id=null)
+  - Atualiza histórico via `conversationService.appendMessages`
   - Envia resposta via `whatsappService.sendText()`
-- [ ] **Criterio:** Paciente consegue agendar, cancelar e tirar duvidas via WhatsApp
+- [x] `patientService.findByPhone(tenantId, phone)` adicionado ao PatientService
+- [x] `appointmentService.cancelByAgent(tenantId, appointmentId, reason)` adicionado (fix crítico: actor_id UUID)
+- [x] TD-18 resolvido: validação de `remoteJid` no controller antes de chamar `handleMessage`
+- [x] 18 testes novos (7 conversation.service + 11 agent.service) — total: 566/566
+- [x] **Criterio:** Paciente consegue agendar, cancelar e tirar duvidas via WhatsApp
 
 ---
 

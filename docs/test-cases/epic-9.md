@@ -129,7 +129,7 @@
 
 ---
 
-## US-9.3 — Processar mensagens com LLM e executar acoes
+## ✅ US-9.3 — Processar mensagens com LLM e executar acoes
 
 ### CT-93-01 — Mensagem de texto simples recebe resposta do LLM
 
@@ -139,7 +139,7 @@
 **When** webhook valido recebido com mensagem `"Qual o horario de funcionamento?"`
 **Then** LLM chamado com system prompt + historico + mensagem atual; resposta de texto enviada via `whatsappService.sendText()`; historico da conversa atualizado no banco
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -161,7 +161,7 @@
 7. `bookingService.bookInChat()` cria consulta + findOrCreate patient
 8. LLM envia mensagem de confirmacao
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -173,7 +173,7 @@
 **When** LLM decide usar `generate_booking_link()` em vez de agendar in-chat
 **Then** `bookingService.generateToken(tenantId, phone)` chamado; URL retornada no formato `https://{FRONTEND_URL}/book/{slug}?token={token64chars}`; mensagem com link enviada ao paciente
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -185,7 +185,7 @@
 **When** LLM chama `cancel_appointment({ appointmentId: "uuid-123", reason: "Paciente solicitou" })`
 **Then** `appointmentService.cancel()` chamado; consulta com status `cancelled` no banco; evento `appointment.cancelled` emitido; LLM confirma cancelamento ao paciente
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -197,7 +197,7 @@
 **When** mensagem recebida via webhook
 **Then** LLM chamado com system prompt contendo `"Este e um novo paciente (sem registro ainda)"` — sem erro; conversa criada no banco via `conversationService.getOrCreate()`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -209,7 +209,7 @@
 **When** nova mensagem recebida e processada
 **Then** LLM recebe apenas as ultimas 20 mensagens no historico; banco armazena ultimas 20 mensagens (mais antigas descartadas)
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -221,7 +221,7 @@
 **When** mensagem chega na instancia de `dr-silva`
 **Then** `agentService.handleMessage()` resolve `tenantId` de `dr-silva` exclusivamente; slots, historico e paciente sao do tenant correto — dados de `dra-carvalho` nunca acessados
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 

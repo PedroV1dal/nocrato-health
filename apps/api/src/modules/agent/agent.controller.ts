@@ -31,7 +31,12 @@ export class AgentController {
       return
     }
 
-    if (payload.data?.key?.fromMe === true) {
+    // TD-18: validar remoteJid antes de delegar ao service (payload mal-formado)
+    if (!payload.data?.key?.remoteJid) {
+      return
+    }
+
+    if (payload.data.key.fromMe === true) {
       return
     }
 
