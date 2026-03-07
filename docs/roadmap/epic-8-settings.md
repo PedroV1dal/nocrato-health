@@ -34,13 +34,13 @@
 
 ---
 
-## US-8.3: [FRONTEND] Pagina de configuracoes
+## ✅ US-8.3: [FRONTEND] Pagina de configuracoes
 
 **Agentes:** `frontend` → `designer` → `qa`
 
-- [ ] routes/doctor/_layout/settings/index.tsx
-- [ ] Secao 1: Dados do Doutor (nome, CRM, especialidade, telefone)
-- [ ] Secao 2: Horarios de Trabalho (editor de intervalos por dia)
-- [ ] Secao 3: Branding (cor, logo)
-- [ ] Secao 4: Agente WhatsApp (boas-vindas, personalidade, FAQ, modo booking)
-- [ ] **Criterio:** Todas configs editaveis e salvas
+- [x] routes/doctor/settings.tsx (4 seções em Tabs)
+- [x] Secao 1: Dados do Doutor (nome, especialidade, telefone — CRM/email read-only)
+- [x] Secao 2: Horarios de Trabalho (editor de intervalos por dia com toggle e multi-slot)
+- [x] Secao 3: Branding (cor hex com color picker + preview, logo URL com preview)
+- [x] Secao 4: Agente WhatsApp (boas-vindas, personalidade, FAQ, regras, bookingMode, enabled toggle)
+- [x] **Criterio:** Todas configs editaveis e salvas — 5/5 CTs Playwright passando

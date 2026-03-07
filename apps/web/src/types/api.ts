@@ -186,6 +186,62 @@ export interface PatientProfile {
   documents: PatientDocument[]
 }
 
+// US-8.3 — Doctor settings
+
+export interface ProfileResponseDto {
+  id: string
+  tenantId: string
+  email: string
+  name: string | null
+  specialty: string | null
+  phone: string | null
+  crm: string | null
+  crmState: string | null
+  workingHours: WorkingHours | null
+  timezone: string
+  appointmentDuration: number
+  onboardingCompleted: boolean
+  branding: {
+    primaryColor: string | null
+    logoUrl: string | null
+  }
+}
+
+export interface AgentSettingsResponseDto {
+  id: string
+  tenantId: string
+  enabled: boolean
+  bookingMode: 'link' | 'chat' | 'both'
+  welcomeMessage: string | null
+  personality: string | null
+  faq: string | null
+  appointmentRules: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UpdateProfileSettingsDto {
+  name?: string
+  specialty?: string
+  phone?: string
+  workingHours?: WorkingHours
+  timezone?: string
+}
+
+export interface UpdateBrandingSettingsDto {
+  primaryColor?: string
+  logoUrl?: string | null
+}
+
+export interface UpdateAgentSettingsV2Dto {
+  enabled?: boolean
+  bookingMode?: 'link' | 'chat' | 'both'
+  welcomeMessage?: string | null
+  personality?: string | null
+  faq?: string | null
+  appointmentRules?: string | null
+}
+
 // US-5.6 — Appointment portal
 
 export type AppointmentStatus =

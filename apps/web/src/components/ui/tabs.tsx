@@ -38,7 +38,7 @@ export function TabsList({ children, className }: { children: React.ReactNode; c
   return (
     <div
       className={cn(
-        'inline-flex h-10 items-center rounded-md bg-[#e8dfc8]/40 p-1 text-amber-mid',
+        'inline-flex flex-wrap gap-y-1 min-h-10 items-center rounded-md bg-[#e8dfc8]/40 p-1 text-amber-mid',
         className,
       )}
     >

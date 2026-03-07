@@ -68,13 +68,13 @@ export function SelectTrigger({ children, className, id }: SelectTriggerProps) {
       type="button"
       onClick={() => setOpen(!open)}
       className={cn(
-        'flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-amber-dark/30 disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-10 w-full items-center justify-between rounded-md border border-[#e8dfc8] bg-white px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-amber-dark/30 disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}
     >
       {children}
       <svg
-        className={cn('h-4 w-4 text-gray-400 transition-transform', open && 'rotate-180')}
+        className={cn('h-4 w-4 text-amber-mid transition-transform', open && 'rotate-180')}
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
@@ -90,7 +90,7 @@ export function SelectTrigger({ children, className, id }: SelectTriggerProps) {
 export function SelectValue({ placeholder }: { placeholder?: string }) {
   const { value } = React.useContext(SelectContext)
   return (
-    <span className={cn(!value && 'text-gray-400')}>
+    <span className={cn(!value && 'text-amber-mid/60')}>
       {value || placeholder}
     </span>
   )
@@ -103,7 +103,7 @@ export function SelectContent({ children, className }: { children: React.ReactNo
   return (
     <div
       className={cn(
-        'absolute z-50 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg',
+        'absolute z-50 mt-1 w-full rounded-md border border-[#e8dfc8] bg-white shadow-lg',
         className,
       )}
     >

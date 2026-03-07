@@ -163,7 +163,7 @@
 **When** navegar para /doctor/settings
 **Then** a pagina exibe as 4 secoes (Dados do Doutor, Horarios, Branding, Agente WhatsApp) com os valores atuais carregados nos campos
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -175,7 +175,7 @@
 **When** alterar o campo "Especialidade" para "Neurologia" e clicar em "Salvar"
 **Then** toast de sucesso e exibido; ao recarregar a pagina, "Especialidade" mostra "Neurologia"
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -187,7 +187,7 @@
 **When** alterar "Mensagem de boas-vindas" para "Ola! Posso ajudar?" e toggle "Agente habilitado" para ativo, depois clicar "Salvar"
 **Then** toast de sucesso; dados persistidos no banco (verificavel via GET /api/v1/doctor/agent-settings)
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -199,7 +199,7 @@
 **When** acessar /doctor/settings diretamente pela URL
 **Then** redirecionado para /doctor/login sem exibir a pagina de configuracoes
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -211,4 +211,4 @@
 **When** selecionar "Apenas link" no seletor de modo e clicar "Salvar"
 **Then** HTTP 200 na API; ao recarregar /doctor/settings, o seletor mostra "Apenas link"
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou

@@ -209,6 +209,19 @@ Em `$slug.tsx`, `formatDateTime` e a formatação de data no Step2 usam `timeZon
 
 ---
 
+### TD-16 — `workingHours: {}` apaga horários mas não invalida step de onboarding
+**Módulo:** `apps/web/routes/doctor/settings`, `doctor/onboarding`
+**Identificado em:** US-8.3 / Revisão tech-lead (OBS-TL-1)
+**Prioridade:** P3
+
+Se o usuário desativar todos os dias na `ScheduleSection` de settings e salvar, o backend persiste `working_hours = {}`. O serviço de onboarding verifica schedule como `Object.keys(working_hours).length > 0` — portanto `{}` faria o step "Horários" parecer incompleto retroativamente (embora `onboarding_completed` permaneça `true`).
+
+**Impacto atual:** Nenhum no MVP. O step de onboarding não é exibido após conclusão. O campo `onboarding_completed` não é revertido pelo update.
+
+**Fix:** Documentar no onboarding service que working_hours vazio é um estado válido pós-onboarding. Ou adicionar validação no settings para não permitir salvar sem pelo menos um dia ativo.
+
+---
+
 ## Resolvidos
 
 *(nenhum ainda)*

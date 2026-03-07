@@ -21,6 +21,7 @@ import { DoctorPatientsPage } from './routes/doctor/patients/index'
 import { DoctorPatientProfilePage } from './routes/doctor/patients/$patientId'
 import { DoctorAppointmentsPage } from './routes/doctor/appointments/index'
 import { DoctorAppointmentDetailPage } from './routes/doctor/appointments/$appointmentId'
+import { DoctorSettingsPage } from './routes/doctor/settings'
 import { BookingPage } from './routes/book/$slug'
 import './app.css'
 
@@ -168,6 +169,12 @@ const doctorAppointmentDetailRoute = createRoute({
   component: DoctorAppointmentDetailPage,
 })
 
+const doctorSettingsRoute = createRoute({
+  getParentRoute: () => doctorLayoutRoute,
+  path: '/doctor/settings',
+  component: DoctorSettingsPage,
+})
+
 // ─── Rota pública de agendamento (sem guard, sem auth) ───────────────────────
 
 const bookingRoute = createRoute({
@@ -198,6 +205,7 @@ const routeTree = rootRoute.addChildren([
     doctorPatientProfileRoute,
     doctorAppointmentsRoute,
     doctorAppointmentDetailRoute,
+    doctorSettingsRoute,
   ]),
   bookingRoute,
 ])
