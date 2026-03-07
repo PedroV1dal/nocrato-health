@@ -89,7 +89,7 @@
 **When** GET /api/v1/doctor/profile com Authorization: Bearer {token}
 **Then** HTTP 200 com todos os campos do perfil; sem password_hash na resposta
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -101,7 +101,7 @@
 **When** PATCH /api/v1/doctor/profile { "specialty": "Cardiologia", "phone": "(11) 98765-4321" }
 **Then** HTTP 200 com specialty = "Cardiologia" e phone atualizado; name permanece inalterado
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -113,7 +113,7 @@
 **When** PATCH /api/v1/doctor/profile/branding { "primaryColor": "#1A73E8" }
 **Then** HTTP 200; tabela tenants tem primary_color = "#1A73E8" para o tenant do doutor
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -125,7 +125,7 @@
 **When** PATCH /api/v1/doctor/profile { "workingHours": { "monday": [{ "start": "08:00", "end": "12:00" }], "wednesday": [{ "start": "13:00", "end": "17:00" }] } }
 **Then** HTTP 200; banco armazena o JSONB com os dias e intervalos exatos enviados
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -137,7 +137,7 @@
 **When** PATCH /api/v1/doctor/profile sem header Authorization
 **Then** HTTP 401 Unauthorized
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 
@@ -149,7 +149,7 @@
 **When** dr-silva autenticado faz PATCH /api/v1/doctor/profile { "name": "Nome Invasor" } com seu JWT
 **Then** apenas o registro de dr-silva e atualizado — dados de dra-carvalho permanecem intactos
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  [ ] falhou
 
 ---
 

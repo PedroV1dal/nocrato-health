@@ -23,14 +23,14 @@
 
 ---
 
-## US-8.2: Como doutor, quero editar meu perfil e horarios
+## ✅ US-8.2: Como doutor, quero editar meu perfil e horarios
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] GET /api/v1/doctor/profile
-- [ ] PATCH /api/v1/doctor/profile { name?, specialty?, phone?, workingHours?, timezone? }
-- [ ] PATCH /api/v1/doctor/profile/branding { primaryColor?, logoUrl? }
-- [ ] **Criterio:** Perfil atualizado
+- [x] GET /api/v1/doctor/profile
+- [x] PATCH /api/v1/doctor/profile { name?, specialty?, phone?, workingHours?, timezone? }
+- [x] PATCH /api/v1/doctor/profile/branding { primaryColor?, logoUrl? }
+- [x] **Criterio:** Perfil atualizado
 
 ---
 
