@@ -27,8 +27,10 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
-          CLEAN_USER=$(printf '%s' "$VPS_USER" | sed 's/[^a-zA-Z0-9._-]//g')
-          CLEAN_HOST=$(printf '%s' "$VPS_HOST" | sed 's/[^a-zA-Z0-9.:_-]//g')
+          CLEAN_USER=$(printf '%s' "$VPS_USER" | tr -dc 'a-zA-Z0-9._-')
+          CLEAN_HOST=$(printf '%s' "$VPS_HOST" | tr -dc 'a-zA-Z0-9.:_-')
+          echo "User length: ${#CLEAN_USER}, Host: $CLEAN_HOST"
+          printf '%s' "$VPS_USER" | od -An -tx1 | head -1
           ssh -i ~/.ssh/id_rsa \
             -o StrictHostKeyChecking=no \
             -o IdentitiesOnly=yes \
