@@ -45,15 +45,15 @@
 
 ---
 
-## US-11.4: Como desenvolvedor, quero fazer deploy
+## ✅ US-11.4: Como desenvolvedor, quero fazer deploy
 
 **Agentes:** `devops` → `tech-lead`
 
-- [ ] Hetzner CX22 (2vCPU, 4GB RAM)
-- [ ] Docker Compose producao (PostgreSQL, Evolution API)
-- [ ] Nginx reverse proxy + SSL (Let's Encrypt)
-- [ ] NestJS build + serve producao
-- [ ] React build → servido pelo Nginx
-- [ ] ./uploads/ no disco local
-- [ ] .env producao (DB, JWT, RESEND, WEBHOOK_API_KEY)
-- [ ] **Criterio:** app.nocrato.com funcionando com SSL
+- [x] Hetzner CX22 (2vCPU, 4GB RAM)
+- [x] Docker Compose producao (PostgreSQL, Evolution API)
+- [x] Nginx reverse proxy + SSL (Let's Encrypt)
+- [x] NestJS build + serve producao
+- [x] React build → servido pelo Nginx
+- [x] ./uploads/ no disco local
+- [x] .env producao (DB, JWT, RESEND, WEBHOOK_API_KEY)
+- [x] **Criterio:** app.nocrato.com funcionando com SSL

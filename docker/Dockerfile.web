@@ -1,0 +1,68 @@
+# ──────────────────────────────────────────────
+# Stage 1: builder
+# Instala dependências e gera o build estático do Vite
+# ──────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Instala pnpm globalmente
+RUN npm install -g pnpm@9.11.0
+
+# Copia arquivos de configuração do workspace
+# (cache de layer: só reinstala deps quando estes arquivos mudam)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps/web/package.json ./apps/web/
+
+# Instala dependências
+RUN pnpm install --frozen-lockfile
+
+# Copia o código-fonte do frontend
+COPY apps/web ./apps/web
+
+# VITE_API_URL é injetada em tempo de build — define a URL base da API
+# Em produção: https://app.nocrato.com
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+
+# Gera build estático em apps/web/dist/
+RUN pnpm --filter @nocrato/web build
+
+# ──────────────────────────────────────────────
+# Stage 2: runner
+# Nginx serve os arquivos estáticos gerados
+# ──────────────────────────────────────────────
+FROM nginx:alpine AS runner
+
+# Remove config padrão do nginx
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Config inline para SPA: redireciona todas as rotas para index.html
+# O nginx do container web só serve o estático — o reverse proxy fica no serviço nginx externo
+RUN printf 'server {\n\
+    listen 80;\n\
+    server_name _;\n\
+    root /usr/share/nginx/html;\n\
+    index index.html;\n\
+\n\
+    # Compressão gzip para assets estáticos\n\
+    gzip on;\n\
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;\n\
+\n\
+    # Cache longo para assets com hash no nome (Vite gera hashes)\n\
+    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {\n\
+        expires 1y;\n\
+        add_header Cache-Control "public, immutable";\n\
+        try_files $uri =404;\n\
+    }\n\
+\n\
+    # SPA routing: todas as rotas desconhecidas servem o index.html\n\
+    location / {\n\
+        try_files $uri $uri/ /index.html;\n\
+    }\n\
+}\n' > /etc/nginx/conf.d/spa.conf
+
+# Copia os arquivos estáticos gerados pelo Vite
+COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+
+EXPOSE 80

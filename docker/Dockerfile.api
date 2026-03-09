@@ -1,0 +1,74 @@
+# ──────────────────────────────────────────────
+# Stage 1: builder
+# Instala dependências e compila o NestJS app
+# ──────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Instala pnpm globalmente
+RUN npm install -g pnpm@9.11.0
+
+# Copia arquivos de configuração do workspace primeiro
+# (cache de layer: só reinstala deps quando estes arquivos mudam)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps/api/package.json ./apps/api/
+
+# Instala todas as dependências do workspace (frozen para reprodutibilidade)
+RUN pnpm install --frozen-lockfile
+
+# Copia o código-fonte da API
+COPY apps/api ./apps/api
+
+# Compila o NestJS (gera dist/ dentro de apps/api/)
+RUN pnpm --filter @nocrato/api build
+
+# Compila os scripts standalone de database (migrate.ts, seed.ts, knexfile.ts e migrations/)
+# Esses arquivos não fazem parte do módulo NestJS e não são incluídos pelo nest build.
+# O tsc usa o tsconfig da API com outDir apontado para dist/, sobrescrevendo apenas os arquivos extras.
+RUN cd apps/api && \
+    npx tsc --outDir dist \
+      --module commonjs \
+      --esModuleInterop true \
+      --resolveJsonModule true \
+      --skipLibCheck true \
+      --target ES2021 \
+      --moduleResolution node \
+      src/database/migrate.ts \
+      src/database/seed.ts \
+      src/database/knexfile.ts \
+      src/database/migrations/*.ts
+
+# ──────────────────────────────────────────────
+# Stage 2: runner
+# Imagem mínima de runtime — sem devDependencies
+# ──────────────────────────────────────────────
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Instala pnpm para o deploy-install de produção
+RUN npm install -g pnpm@9.11.0
+
+# Copia apenas os artefatos necessários para runtime
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-lock.yaml ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+
+# Instala apenas dependências de produção
+RUN pnpm install --frozen-lockfile --prod
+
+# Cria diretório de uploads com permissões adequadas
+RUN mkdir -p /app/uploads && chmod 755 /app/uploads
+
+WORKDIR /app/apps/api
+
+EXPOSE 3000
+
+# Health check: /health não tem prefixo /api/v1 (configurado em main.ts)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1
+
+CMD ["node", "dist/main"]

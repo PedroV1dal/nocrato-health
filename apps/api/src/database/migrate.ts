@@ -4,6 +4,12 @@ import * as path from 'path'
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
+// Em produção (dist/), as migrations são compiladas para .js
+// Em desenvolvimento (src/), ts-node carrega .ts via pnpm migrate
+const isCompiled = __filename.endsWith('.js')
+const migrationsExt = isCompiled ? 'js' : 'ts'
+const migrationsLoadExt = isCompiled ? ['.js'] : ['.ts']
+
 async function runMigrations() {
   const db = knex({
     client: 'pg',
@@ -16,8 +22,8 @@ async function runMigrations() {
     },
     migrations: {
       directory: path.resolve(__dirname, 'migrations'),
-      extension: 'ts',
-      loadExtensions: ['.ts'],
+      extension: migrationsExt,
+      loadExtensions: migrationsLoadExt,
     },
   })
 

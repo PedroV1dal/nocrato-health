@@ -1,0 +1,128 @@
+services:
+  # ──────────────────────────────────────────
+  # PostgreSQL 16 — banco de dados principal
+  # ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: nocrato_postgres_prod
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nocrato_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ──────────────────────────────────────────
+  # Evolution API — gateway WhatsApp
+  # ──────────────────────────────────────────
+  evolution:
+    image: atendai/evolution-api:v2.2.3
+    container_name: nocrato_evolution_prod
+    environment:
+      SERVER_URL: ${EVOLUTION_API_URL}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      # Persiste as instâncias WhatsApp conectadas entre restarts
+      DATABASE_ENABLED: "false"
+    volumes:
+      - evolution_data:/evolution/instances
+    networks:
+      - nocrato_net
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────
+  # API NestJS — backend
+  # Contexto de build: raiz do monorepo (para acessar pnpm-workspace.yaml)
+  # ──────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: nocrato_api_prod
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      # Sobrescreve DB_HOST para o nome do serviço no compose
+      DB_HOST: postgres
+      # Evolution API rodando no mesmo compose network
+      EVOLUTION_API_URL: http://evolution:8080
+    volumes:
+      # uploads_data compartilhado com nginx para servir arquivos diretamente
+      - uploads_data:/app/uploads
+    networks:
+      - nocrato_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      evolution:
+        condition: service_started
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────
+  # Frontend React — build estático servido pelo nginx interno
+  # ──────────────────────────────────────────
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      args:
+        # URL da API em produção — injetada em tempo de build do Vite
+        VITE_API_URL: https://app.nocrato.com
+    container_name: nocrato_web_prod
+    networks:
+      - nocrato_net
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ──────────────────────────────────────────
+  # Nginx — reverse proxy + SSL termination
+  # ──────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: nocrato_nginx_prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Config do nginx (read-only)
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Certificados Let's Encrypt gerados pelo Certbot no host (bind mount direto — não volume nomeado)
+      # Certbot escreve em /etc/letsencrypt no host; nginx lê read-only
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Volume compartilhado com a API para servir uploads diretamente
+      - uploads_data:/app/uploads:ro
+    networks:
+      - nocrato_net
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: nocrato_postgres_prod
+  evolution_data:
+    name: nocrato_evolution_prod
+  uploads_data:
+    name: nocrato_uploads_prod
+
+networks:
+  nocrato_net:
+    name: nocrato_prod_network
+    driver: bridge
