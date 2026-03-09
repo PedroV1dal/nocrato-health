@@ -26,15 +26,16 @@
 
 ---
 
-## US-10.2: Como paciente, quero acessar meu portal com o codigo
+## US-10.2: Como paciente, quero acessar meu portal com o codigo ✅
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] POST /api/v1/patient/portal/access { code }
-- [ ] Retorna: { patient, appointments, documents }
+- [x] POST /api/v1/patient/portal/access { code }
+- [x] Retorna: { patient, doctor, tenant, appointments, documents }
   - `// clinicalNotes excluídas: registros internos do médico, não expostos ao paciente`
-- [ ] Sem JWT — sessao stateless baseada no codigo
-- [ ] **Criterio:** Acesso read-only funcional
+- [x] Sem JWT — sessao stateless baseada no codigo
+- [x] GET /api/v1/patient/portal/documents/:id?code=... — proxy de download com validação de código
+- [x] **Criterio:** Acesso read-only funcional
 
 ---
 

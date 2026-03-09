@@ -1,4 +1,10 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import type { Knex } from 'knex'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { KNEX } from '@/database/knex.provider'
@@ -243,6 +249,139 @@ export class PatientService {
       .first()
 
     return (patient as PatientPublicRow | undefined) ?? null
+  }
+
+  // US-10.2: Retorna os dados do portal do paciente autenticado via código de acesso
+  async getPatientPortalData(code: string) {
+    // 1. Buscar paciente pelo código de acesso junto com dados do tenant e do doutor
+    const row = await this.knex('patients')
+      .join('tenants', 'patients.tenant_id', 'tenants.id')
+      .join('doctors', 'doctors.tenant_id', 'tenants.id')
+      .where('patients.portal_access_code', code)
+      .select([
+        'patients.id',
+        'patients.name',
+        'patients.phone',
+        'patients.email',
+        'patients.date_of_birth',
+        'patients.portal_active',
+        'patients.status',
+        'patients.tenant_id',
+        'tenants.name as tenant_name',
+        'tenants.status as tenant_status',
+        'tenants.slug',
+        'tenants.primary_color',
+        'tenants.logo_url',
+        'doctors.name as doctor_name',
+        'doctors.specialty as doctor_specialty',
+        'doctors.timezone as doctor_timezone',
+      ])
+      .first()
+
+    if (!row) {
+      throw new NotFoundException('Código de acesso inválido')
+    }
+
+    // 2. Validar status do portal, do paciente e do tenant
+    if (!row.portal_active) {
+      throw new ForbiddenException('Portal inativo')
+    }
+
+    if (row.status !== 'active') {
+      throw new ForbiddenException('Paciente inativo')
+    }
+
+    if (row.tenant_status !== 'active') {
+      throw new ForbiddenException('Clínica inativa')
+    }
+
+    const { tenant_id: tenantId, id: patientId } = row
+
+    // 3. Buscar appointments e documentos em paralelo — clinical_notes NUNCA são expostas ao paciente
+    const [appointments, documents] = await Promise.all([
+      this.knex('appointments')
+        .where({ tenant_id: tenantId, patient_id: patientId })
+        .select(['id', 'date_time', 'status', 'duration_minutes', 'started_at', 'completed_at', 'cancellation_reason'])
+        .orderBy('date_time', 'desc'),
+      this.knex('documents')
+        .where({ tenant_id: tenantId, patient_id: patientId })
+        .select(['id', 'type', 'file_url', 'file_name', 'description', 'created_at'])
+        .orderBy('created_at', 'desc'),
+    ])
+
+    return {
+      patient: {
+        id: row.id,
+        name: row.name,
+        phone: row.phone,
+        email: row.email,
+        date_of_birth: row.date_of_birth,
+        portal_active: row.portal_active,
+        status: row.status,
+      },
+      doctor: {
+        name: row.doctor_name,
+        specialty: row.doctor_specialty,
+        timezone: row.doctor_timezone,
+      },
+      tenant: {
+        name: row.tenant_name,
+        slug: row.slug,
+        primary_color: row.primary_color,
+        logo_url: row.logo_url,
+        status: row.tenant_status,
+      },
+      appointments,
+      documents,
+    }
+  }
+
+  // US-10.2: Retorna um documento do paciente autenticado via código de acesso (para download)
+  async getPatientDocument(code: string, documentId: string) {
+    // 1. Validar o código de acesso e checar status do portal/paciente/tenant
+    const row = await this.knex('patients')
+      .join('tenants', 'patients.tenant_id', 'tenants.id')
+      .where('patients.portal_access_code', code)
+      .select([
+        'patients.id',
+        'patients.portal_active',
+        'patients.status',
+        'patients.tenant_id',
+        'tenants.status as tenant_status',
+      ])
+      .first()
+
+    if (!row) {
+      throw new NotFoundException('Código de acesso inválido')
+    }
+
+    if (!row.portal_active) {
+      throw new ForbiddenException('Portal inativo')
+    }
+
+    if (row.status !== 'active') {
+      throw new ForbiddenException('Paciente inativo')
+    }
+
+    if (row.tenant_status !== 'active') {
+      throw new ForbiddenException('Clínica inativa')
+    }
+
+    // 2. Buscar o documento com isolamento por patient_id e tenant_id
+    const document = await this.knex('documents')
+      .where({
+        id: documentId,
+        patient_id: row.id,
+        tenant_id: row.tenant_id,
+      })
+      .select(['id', 'type', 'file_url', 'file_name', 'description', 'created_at'])
+      .first()
+
+    if (!document) {
+      throw new NotFoundException('Documento não encontrado')
+    }
+
+    return document
   }
 
   // US-9.1: Ativa o portal do paciente e emite evento para notificação WhatsApp

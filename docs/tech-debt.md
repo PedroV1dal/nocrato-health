@@ -284,6 +284,17 @@ As chamadas a `openai.chat.completions.create()` em `handleMessage` não têm `t
 
 ---
 
+### TD-23 — Acessos ao portal do paciente não registrados no event_log
+**Módulo:** `patient`
+**Identificado em:** US-10.2 (OBS-TL-1 tech-lead)
+**Prioridade:** P2
+
+`getPatientPortalData` e `getPatientDocument` não registram nenhuma entrada no `event_log`. Acessos ao portal médico são ações de auditoria relevante (LGPD) — quem acessou, quando, qual paciente.
+
+**Fix:** Registrar evento `patient.portal_accessed` no `event_log` com `actor_type='patient'`, `actor_id=patient.id`, `tenant_id`, `payload: { patient_id, ip? }` a cada POST /access bem-sucedido.
+
+---
+
 ## Resolvidos
 
 ### TD-18 — Type guard do webhook controller não validava `data.key.remoteJid`

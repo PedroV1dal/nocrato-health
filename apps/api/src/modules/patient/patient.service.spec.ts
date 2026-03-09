@@ -31,7 +31,7 @@ jest.mock('@/config/env', () => ({
 }))
 
 import { Test, TestingModule } from '@nestjs/testing'
-import { ConflictException, NotFoundException } from '@nestjs/common'
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { PatientService } from './patient.service'
 import { EventLogService } from '@/modules/event-log/event-log.service'
@@ -1298,6 +1298,588 @@ describe('PatientService — updatePatient', () => {
       await expect(
         service.updatePatient(TENANT_ID_U, PATIENT_ID_U, { name: 'X' }),
       ).rejects.not.toThrow(ConflictException)
+    })
+  })
+})
+
+// =============================================================================
+// US-10.2 — getPatientPortalData
+// =============================================================================
+
+describe('PatientService — getPatientPortalData', () => {
+  let service: PatientService
+  let mockKnexPortal: jest.Mock
+
+  const CODE = 'MRO-5678-PAC'
+
+  /**
+   * Row retornada pelo JOIN patients + tenants + doctors
+   */
+  const makePortalRow = (overrides: Record<string, unknown> = {}) => ({
+    id: 'patient-portal-uuid',
+    name: 'Maria Oliveira',
+    phone: '11988880001',
+    email: 'maria.oliveira@example.com',
+    date_of_birth: '1985-03-20',
+    portal_active: true,
+    status: 'active',
+    tenant_id: 'tenant-portal-uuid',
+    tenant_name: 'Clínica Dr. Silva',
+    tenant_status: 'active',
+    slug: 'dr-silva',
+    primary_color: '#1D4ED8',
+    logo_url: null,
+    doctor_name: 'Dr. João Silva',
+    doctor_specialty: 'Clínica Geral',
+    doctor_timezone: 'America/Sao_Paulo',
+    ...overrides,
+  })
+
+  const makePortalAppointment = (overrides: Record<string, unknown> = {}) => ({
+    id: 'appt-portal-1',
+    date_time: new Date('2024-03-10T14:00:00Z'),
+    status: 'completed',
+    duration_minutes: 60,
+    started_at: new Date('2024-03-10T14:05:00Z'),
+    completed_at: new Date('2024-03-10T15:00:00Z'),
+    cancellation_reason: null,
+    ...overrides,
+  })
+
+  const makePortalDocument = (overrides: Record<string, unknown> = {}) => ({
+    id: 'doc-portal-1',
+    type: 'prescription',
+    file_url: '/uploads/tenant-portal-uuid/receita.pdf',
+    file_name: 'receita_2024.pdf',
+    description: 'Receita médica',
+    created_at: new Date('2024-03-10T15:20:00Z'),
+    ...overrides,
+  })
+
+  /**
+   * Constrói um mock do query builder que suporta join (usado no getPatientPortalData).
+   * O builder JOIN encadeia: .join().join().where().select().first()
+   */
+  const makeJoinBuilder = (firstValue: unknown) => {
+    const builder: Record<string, jest.Mock> = {
+      join: jest.fn(),
+      where: jest.fn(),
+      select: jest.fn(),
+      first: jest.fn().mockResolvedValue(firstValue),
+      orderBy: jest.fn().mockResolvedValue([]),
+    }
+    builder.join.mockReturnValue(builder)
+    builder.where.mockReturnValue(builder)
+    builder.select.mockReturnValue(builder)
+    return builder
+  }
+
+  beforeEach(async () => {
+    jest.clearAllMocks()
+
+    const row = makePortalRow()
+    const joinBuilder = makeJoinBuilder(row)
+
+    const apptBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockResolvedValue([]),
+    }
+    const docBuilder = {
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockResolvedValue([]),
+    }
+
+    mockKnexPortal = jest.fn().mockImplementation((table: string) => {
+      if (table === 'patients') return joinBuilder
+      if (table === 'appointments') return apptBuilder
+      if (table === 'documents') return docBuilder
+      return joinBuilder
+    })
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        PatientService,
+        { provide: KNEX, useValue: mockKnexPortal },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
+      ],
+    }).compile()
+
+    service = moduleRef.get<PatientService>(PatientService)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-01: Happy path — código válido retorna dados completos
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-01: código válido retorna dados do portal', () => {
+    it('should return patient, doctor, tenant, appointments and documents when code is valid', async () => {
+      const row = makePortalRow()
+      const appts = [makePortalAppointment(), makePortalAppointment({ id: 'appt-portal-2' })]
+      const docs = [makePortalDocument()]
+
+      const joinBuilder = makeJoinBuilder(row)
+      const apptBuilder = {
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockResolvedValue(appts),
+      }
+      const docBuilder = {
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockResolvedValue(docs),
+      }
+
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        if (table === 'appointments') return apptBuilder
+        if (table === 'documents') return docBuilder
+        return makeJoinBuilder(null)
+      })
+
+      const result = await service.getPatientPortalData(CODE)
+
+      expect(result.patient).toMatchObject({
+        id: row.id,
+        name: row.name,
+        phone: row.phone,
+        portal_active: true,
+        status: 'active',
+      })
+      expect(result.doctor).toMatchObject({
+        name: row.doctor_name,
+        specialty: row.doctor_specialty,
+        timezone: row.doctor_timezone,
+      })
+      expect(result.tenant).toMatchObject({
+        name: row.tenant_name,
+        slug: row.slug,
+      })
+      expect(result.appointments).toHaveLength(2)
+      expect(result.documents).toHaveLength(1)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-02: Código inexistente → NotFoundException
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-02: código inexistente lança NotFoundException', () => {
+    it('should throw NotFoundException("Código de acesso inválido") when code not found', async () => {
+      const joinBuilder = makeJoinBuilder(null)
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        return makeJoinBuilder(null)
+      })
+
+      await expect(service.getPatientPortalData('XXX-0000-ZZZ')).rejects.toThrow(NotFoundException)
+    })
+
+    it('should throw NotFoundException with message "Código de acesso inválido"', async () => {
+      const joinBuilder = makeJoinBuilder(null)
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        return makeJoinBuilder(null)
+      })
+
+      await expect(service.getPatientPortalData('XXX-0000-ZZZ')).rejects.toThrow(
+        'Código de acesso inválido',
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-03: portal_active=false → ForbiddenException('Portal inativo')
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-03: portal_active=false lança ForbiddenException', () => {
+    it('should throw ForbiddenException("Portal inativo") when portal_active is false', async () => {
+      const row = makePortalRow({ portal_active: false })
+      const joinBuilder = makeJoinBuilder(row)
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        return makeJoinBuilder(null)
+      })
+
+      await expect(service.getPatientPortalData(CODE)).rejects.toThrow(ForbiddenException)
+    })
+
+    it('should throw with message "Portal inativo"', async () => {
+      const row = makePortalRow({ portal_active: false })
+      const joinBuilder = makeJoinBuilder(row)
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        return makeJoinBuilder(null)
+      })
+
+      await expect(service.getPatientPortalData(CODE)).rejects.toThrow('Portal inativo')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-04: patient.status=inactive → ForbiddenException('Paciente inativo')
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-04: patient status=inactive lança ForbiddenException', () => {
+    it('should throw ForbiddenException("Paciente inativo") when patient status is inactive', async () => {
+      const row = makePortalRow({ status: 'inactive' })
+      const joinBuilder = makeJoinBuilder(row)
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        return makeJoinBuilder(null)
+      })
+
+      await expect(service.getPatientPortalData(CODE)).rejects.toThrow(ForbiddenException)
+    })
+
+    it('should throw with message "Paciente inativo"', async () => {
+      const row = makePortalRow({ status: 'inactive' })
+      const joinBuilder = makeJoinBuilder(row)
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        return makeJoinBuilder(null)
+      })
+
+      await expect(service.getPatientPortalData(CODE)).rejects.toThrow('Paciente inativo')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-05: tenant.status=inactive → ForbiddenException('Clínica inativa')
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-05: tenant status=inactive lança ForbiddenException', () => {
+    it('should throw ForbiddenException("Clínica inativa") when tenant status is inactive', async () => {
+      const row = makePortalRow({ tenant_status: 'inactive' })
+      const joinBuilder = makeJoinBuilder(row)
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        return makeJoinBuilder(null)
+      })
+
+      await expect(service.getPatientPortalData(CODE)).rejects.toThrow(ForbiddenException)
+    })
+
+    it('should throw with message "Clínica inativa"', async () => {
+      const row = makePortalRow({ tenant_status: 'inactive' })
+      const joinBuilder = makeJoinBuilder(row)
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        return makeJoinBuilder(null)
+      })
+
+      await expect(service.getPatientPortalData(CODE)).rejects.toThrow('Clínica inativa')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-06: clinical_notes NUNCA aparecem na resposta
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-06: clinical_notes ausentes da resposta', () => {
+    it('should never include clinicalNotes in the response', async () => {
+      const result = await service.getPatientPortalData(CODE)
+
+      expect(result).not.toHaveProperty('clinicalNotes')
+      expect(Object.keys(result)).not.toContain('clinicalNotes')
+    })
+
+    it('should never query the clinical_notes table', async () => {
+      await service.getPatientPortalData(CODE)
+
+      // Verificar que mockKnexPortal nunca foi chamado com 'clinical_notes'
+      const tableCalls = mockKnexPortal.mock.calls.map((call: unknown[]) => call[0] as string)
+      expect(tableCalls).not.toContain('clinical_notes')
+    })
+
+    it('response should contain exactly patient, doctor, tenant, appointments, documents', async () => {
+      const result = await service.getPatientPortalData(CODE)
+
+      const keys = Object.keys(result).sort()
+      expect(keys).toEqual(['appointments', 'doctor', 'documents', 'patient', 'tenant'])
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-07: appointments incluem cancellation_reason (não notas)
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-07: appointments incluem cancellation_reason', () => {
+    it('should include cancellation_reason in each appointment', async () => {
+      const appts = [
+        makePortalAppointment({ cancellation_reason: null }),
+        makePortalAppointment({ id: 'appt-2', status: 'cancelled', cancellation_reason: 'Paciente cancelou' }),
+      ]
+
+      const joinBuilder = makeJoinBuilder(makePortalRow())
+      const apptBuilder = {
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockResolvedValue(appts),
+      }
+      const docBuilder = {
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockResolvedValue([]),
+      }
+
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        if (table === 'appointments') return apptBuilder
+        if (table === 'documents') return docBuilder
+        return makeJoinBuilder(null)
+      })
+
+      const result = await service.getPatientPortalData(CODE)
+
+      // Appointments devem vir com cancellation_reason
+      expect(result.appointments[0]).toHaveProperty('cancellation_reason')
+      expect(result.appointments[1]).toHaveProperty('cancellation_reason', 'Paciente cancelou')
+    })
+
+    it('should request cancellation_reason field from appointments table', async () => {
+      const joinBuilder = makeJoinBuilder(makePortalRow())
+      const apptBuilder = {
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockResolvedValue([]),
+      }
+      const docBuilder = {
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockResolvedValue([]),
+      }
+
+      mockKnexPortal.mockImplementation((table: string) => {
+        if (table === 'patients') return joinBuilder
+        if (table === 'appointments') return apptBuilder
+        if (table === 'documents') return docBuilder
+        return makeJoinBuilder(null)
+      })
+
+      await service.getPatientPortalData(CODE)
+
+      const selectArgs = apptBuilder.select.mock.calls[0][0] as string[]
+      expect(selectArgs).toContain('cancellation_reason')
+    })
+  })
+})
+
+// =============================================================================
+// US-10.2 — getPatientDocument
+// =============================================================================
+
+describe('PatientService — getPatientDocument', () => {
+  let service: PatientService
+  let mockKnexDoc: jest.Mock
+
+  const CODE = 'MRO-5678-PAC'
+  const DOC_ID = 'doc-uuid-download'
+
+  /**
+   * Row retornada pelo JOIN patients + tenants para validação do código
+   */
+  const makeAccessRow = (overrides: Record<string, unknown> = {}) => ({
+    id: 'patient-portal-uuid',
+    portal_active: true,
+    status: 'active',
+    tenant_id: 'tenant-portal-uuid',
+    tenant_status: 'active',
+    ...overrides,
+  })
+
+  const makeDocumentRow = (overrides: Record<string, unknown> = {}) => ({
+    id: DOC_ID,
+    type: 'prescription',
+    file_url: '/uploads/tenant-portal-uuid/receita.pdf',
+    file_name: 'receita_2024.pdf',
+    description: 'Receita médica',
+    created_at: new Date('2024-03-10T15:20:00Z'),
+    ...overrides,
+  })
+
+  /**
+   * Builder para as duas queries do getPatientDocument:
+   *  1. JOIN patients+tenants → valida código (retorna accessRow)
+   *  2. knex('documents') → busca documento por id+patient_id+tenant_id (retorna documentRow)
+   */
+  const makeAccessBuilder = (firstValue: unknown) => {
+    const builder: Record<string, jest.Mock> = {
+      join: jest.fn(),
+      where: jest.fn(),
+      select: jest.fn(),
+      first: jest.fn().mockResolvedValue(firstValue),
+    }
+    builder.join.mockReturnValue(builder)
+    builder.where.mockReturnValue(builder)
+    builder.select.mockReturnValue(builder)
+    return builder
+  }
+
+  const makeDocumentBuilder = (firstValue: unknown) => ({
+    where: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    first: jest.fn().mockResolvedValue(firstValue),
+  })
+
+  beforeEach(async () => {
+    jest.clearAllMocks()
+
+    const accessBuilder = makeAccessBuilder(makeAccessRow())
+    const documentBuilder = makeDocumentBuilder(makeDocumentRow())
+
+    mockKnexDoc = jest.fn().mockImplementation((table: string) => {
+      if (table === 'patients') return accessBuilder
+      if (table === 'documents') return documentBuilder
+      return makeAccessBuilder(null)
+    })
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        PatientService,
+        { provide: KNEX, useValue: mockKnexDoc },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventLogService, useValue: mockEventLogService },
+      ],
+    }).compile()
+
+    service = moduleRef.get<PatientService>(PatientService)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-08: happy path — documento pertence ao paciente
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-08: código válido retorna documento', () => {
+    it('should return the document when code is valid and document belongs to patient', async () => {
+      const doc = makeDocumentRow()
+      const accessBuilder = makeAccessBuilder(makeAccessRow())
+      const documentBuilder = makeDocumentBuilder(doc)
+
+      mockKnexDoc.mockImplementation((table: string) => {
+        if (table === 'patients') return accessBuilder
+        if (table === 'documents') return documentBuilder
+        return makeAccessBuilder(null)
+      })
+
+      const result = await service.getPatientDocument(CODE, DOC_ID)
+
+      expect(result).toEqual(doc)
+    })
+
+    it('should scope document query to patient_id and tenant_id for isolation', async () => {
+      const accessRow = makeAccessRow()
+      const accessBuilder = makeAccessBuilder(accessRow)
+      const documentBuilder = makeDocumentBuilder(makeDocumentRow())
+
+      mockKnexDoc.mockImplementation((table: string) => {
+        if (table === 'patients') return accessBuilder
+        if (table === 'documents') return documentBuilder
+        return makeAccessBuilder(null)
+      })
+
+      await service.getPatientDocument(CODE, DOC_ID)
+
+      expect(documentBuilder.where).toHaveBeenCalledWith({
+        id: DOC_ID,
+        patient_id: accessRow.id,
+        tenant_id: accessRow.tenant_id,
+      })
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-09: documento não encontrado → NotFoundException
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-09: documento inexistente lança NotFoundException', () => {
+    it('should throw NotFoundException("Documento não encontrado") when document not found', async () => {
+      const accessBuilder = makeAccessBuilder(makeAccessRow())
+      const documentBuilder = makeDocumentBuilder(null) // documento não existe
+
+      mockKnexDoc.mockImplementation((table: string) => {
+        if (table === 'patients') return accessBuilder
+        if (table === 'documents') return documentBuilder
+        return makeAccessBuilder(null)
+      })
+
+      await expect(service.getPatientDocument(CODE, DOC_ID)).rejects.toThrow(NotFoundException)
+    })
+
+    it('should throw with message "Documento não encontrado"', async () => {
+      const accessBuilder = makeAccessBuilder(makeAccessRow())
+      const documentBuilder = makeDocumentBuilder(null)
+
+      mockKnexDoc.mockImplementation((table: string) => {
+        if (table === 'patients') return accessBuilder
+        if (table === 'documents') return documentBuilder
+        return makeAccessBuilder(null)
+      })
+
+      await expect(service.getPatientDocument(CODE, DOC_ID)).rejects.toThrow(
+        'Documento não encontrado',
+      )
+    })
+
+    it('should throw NotFoundException when document belongs to another patient (isolation)', async () => {
+      // Documento existe mas o where({id, patient_id, tenant_id}) não bate → null
+      const accessBuilder = makeAccessBuilder(makeAccessRow())
+      const documentBuilder = makeDocumentBuilder(null)
+
+      mockKnexDoc.mockImplementation((table: string) => {
+        if (table === 'patients') return accessBuilder
+        if (table === 'documents') return documentBuilder
+        return makeAccessBuilder(null)
+      })
+
+      await expect(service.getPatientDocument(CODE, 'doc-de-outro-paciente')).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-102-10: código inválido → mesma validação que getPatientPortalData
+  // -------------------------------------------------------------------------
+
+  describe('CT-102-10: código inválido lança NotFoundException', () => {
+    it('should throw NotFoundException("Código de acesso inválido") when code not found', async () => {
+      const accessBuilder = makeAccessBuilder(null) // código não existe
+
+      mockKnexDoc.mockImplementation((table: string) => {
+        if (table === 'patients') return accessBuilder
+        return makeAccessBuilder(null)
+      })
+
+      await expect(service.getPatientDocument('INVALID-CODE', DOC_ID)).rejects.toThrow(
+        NotFoundException,
+      )
+    })
+
+    it('should throw with message "Código de acesso inválido" when code is invalid', async () => {
+      const accessBuilder = makeAccessBuilder(null)
+
+      mockKnexDoc.mockImplementation((table: string) => {
+        if (table === 'patients') return accessBuilder
+        return makeAccessBuilder(null)
+      })
+
+      await expect(service.getPatientDocument('INVALID-CODE', DOC_ID)).rejects.toThrow(
+        'Código de acesso inválido',
+      )
+    })
+
+    it('should throw ForbiddenException("Portal inativo") when portal_active is false', async () => {
+      const accessBuilder = makeAccessBuilder(makeAccessRow({ portal_active: false }))
+
+      mockKnexDoc.mockImplementation((table: string) => {
+        if (table === 'patients') return accessBuilder
+        return makeAccessBuilder(null)
+      })
+
+      await expect(service.getPatientDocument(CODE, DOC_ID)).rejects.toThrow(ForbiddenException)
     })
   })
 })

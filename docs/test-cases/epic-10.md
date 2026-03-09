@@ -84,7 +84,7 @@
 **When** `POST /api/v1/patient/portal/access { "code": "MRO-5678-PAC" }` (sem Authorization header)
 **Then** HTTP 200 com corpo `{ patient, doctor, tenant, appointments, documents }` — `patient.name = 'Maria Oliveira'`, `appointments` com 2 itens, `documents` com 1 item, campo `clinicalNotes` ausente da resposta
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  — 2026-03-08
 
 ---
 
@@ -96,7 +96,7 @@
 **When** `POST /api/v1/patient/portal/access { "code": "XXX-0000-ZZZ" }`
 **Then** HTTP 404 com mensagem de erro
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  — 2026-03-08
 
 ---
 
@@ -108,7 +108,7 @@
 **When** `POST /api/v1/patient/portal/access { "code": "ABC-1234-XYZ" }`
 **Then** HTTP 403
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  — 2026-03-08
 
 ---
 
@@ -120,7 +120,7 @@
 **When** `POST /api/v1/patient/portal/access { "code": "..." }`
 **Then** HTTP 403
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  — 2026-03-08
 
 ---
 
@@ -132,7 +132,7 @@
 **When** `POST /api/v1/patient/portal/access { "code": "..." }`
 **Then** HTTP 403
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  — 2026-03-08
 
 ---
 
@@ -144,7 +144,7 @@
 **When** `POST /api/v1/patient/portal/access { "code": "..." }` retorna com sucesso
 **Then** resposta contém apenas `{ patient, doctor, tenant, appointments, documents }` — campo `clinicalNotes` ausente
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  — 2026-03-08
 
 ---
 
@@ -156,7 +156,7 @@
 **When** `GET /api/v1/patient/portal/documents/:documentId?code=MRO-5678-PAC`
 **Then** HTTP 200 com conteúdo do arquivo (Content-Type correto, stream do arquivo)
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  — 2026-03-08 (unit test verifica res.download chamado com path + filename corretos)
 
 ---
 
@@ -168,7 +168,7 @@
 **When** `GET /api/v1/patient/portal/documents/:documentId?code=INVALID-CODE`
 **Then** HTTP 404 ou 403 — arquivo não é servido
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  — 2026-03-08
 
 ---
 
@@ -180,7 +180,7 @@
 **When** paciente A usa seu código para baixar o documento de paciente B: `GET /api/v1/patient/portal/documents/:docIdDeB?code=CODIGO_A`
 **Then** HTTP 403 ou 404 — paciente A não acessa documentos de B
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok  — 2026-03-08 (getPatientDocument filtra por tenant_id + patient_id)
 
 ---
 
