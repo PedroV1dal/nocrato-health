@@ -1,16 +1,19 @@
 import { Link, useNavigate } from '@tanstack/react-router'
+import { X } from 'lucide-react'
 import { useAuthStore } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 
 interface NavLinkProps {
-  to: string
-  children: React.ReactNode
+  readonly to: string
+  readonly children: React.ReactNode
+  readonly onClick?: () => void
 }
 
-function NavLink({ to, children }: NavLinkProps) {
+function NavLink({ to, children, onClick }: NavLinkProps) {
   return (
     <Link
       to={to}
+      onClick={onClick}
       className={cn(
         'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white',
       )}
@@ -23,7 +26,11 @@ function NavLink({ to, children }: NavLinkProps) {
   )
 }
 
-export function AgencySidebar() {
+interface AgencySidebarProps {
+  readonly onClose?: () => void
+}
+
+export function AgencySidebar({ onClose }: AgencySidebarProps) {
   const navigate = useNavigate()
   const clearAuth = useAuthStore((s) => s.clearAuth)
 
@@ -33,16 +40,28 @@ export function AgencySidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col bg-amber-dark">
-      <div className="px-6 py-5">
-        <span className="text-lg font-bold tracking-tight text-white font-heading">Nocrato</span>
-        <p className="text-xs text-white/60 mt-0.5">Portal da Agência</p>
+    <aside className="flex h-full w-64 shrink-0 flex-col bg-amber-dark">
+      <div className="px-6 py-5 flex items-center justify-between">
+        <div>
+          <span className="text-lg font-bold tracking-tight text-white font-heading">Nocrato</span>
+          <p className="text-xs text-white/60 mt-0.5">Portal da Agência</p>
+        </div>
+        {/* Close button — only rendered on mobile when onClose is provided */}
+        {onClose && (
+          <button
+            className="p-1 rounded text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            onClick={onClose}
+            aria-label="Fechar menu"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-2">
-        <NavLink to="/agency">Dashboard</NavLink>
-        <NavLink to="/agency/doctors">Doutores</NavLink>
-        <NavLink to="/agency/members">Colaboradores</NavLink>
+        <NavLink to="/agency" onClick={onClose}>Dashboard</NavLink>
+        <NavLink to="/agency/doctors" onClick={onClose}>Doutores</NavLink>
+        <NavLink to="/agency/members" onClick={onClose}>Colaboradores</NavLink>
       </nav>
 
       <div className="px-3 py-4 border-t border-white/20">

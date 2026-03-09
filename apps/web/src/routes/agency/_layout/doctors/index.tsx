@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle } from 'lucide-react'
 import {
   doctorsQueryOptions,
   useUpdateDoctorStatus,
@@ -10,6 +11,7 @@ import { PaginationControls } from '@/components/pagination-controls'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { DoctorListItem } from '@/types/api'
 
 type StatusFilter = '' | 'active' | 'inactive'
@@ -66,11 +68,11 @@ function DoctorRow({ doctor }: { doctor: DoctorListItem }) {
   const nextStatus = doctor.status === 'active' ? 'inactive' : 'active'
 
   return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-      <td className="py-3 px-4 text-sm font-medium text-gray-900">{doctor.name}</td>
-      <td className="py-3 px-4 text-sm text-gray-600">{doctor.email}</td>
-      <td className="py-3 px-4 text-sm text-gray-500 font-mono">{doctor.slug}</td>
-      <td className="py-3 px-4 text-sm text-gray-600">{doctor.specialty ?? '—'}</td>
+    <tr className="border-b border-[#e8dfc8] hover:bg-[#fef9e6] transition-colors">
+      <td className="py-3 px-4 text-sm font-medium text-amber-dark">{doctor.name}</td>
+      <td className="py-3 px-4 text-sm text-amber-mid">{doctor.email}</td>
+      <td className="py-3 px-4 text-sm text-amber-mid font-mono">{doctor.slug}</td>
+      <td className="py-3 px-4 text-sm text-amber-mid">{doctor.specialty ?? '—'}</td>
       <td className="py-3 px-4">
         <StatusBadge status={doctor.status} />
       </td>
@@ -129,14 +131,43 @@ export function AgencyDoctorsPage() {
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center h-32">
-          <p className="text-gray-500 text-sm">Carregando...</p>
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                {['Nome', 'Email', 'Slug', 'Especialidade', 'Status', 'Ações'].map((col) => (
+                  <th
+                    key={col}
+                    className="py-3 px-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {['sk-1', 'sk-2', 'sk-3', 'sk-4', 'sk-5'].map((key) => (
+                <tr key={key} className="border-b border-gray-100">
+                  <td className="py-3 px-4"><Skeleton className="h-4 w-36" /></td>
+                  <td className="py-3 px-4"><Skeleton className="h-4 w-44" /></td>
+                  <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
+                  <td className="py-3 px-4"><Skeleton className="h-4 w-28" /></td>
+                  <td className="py-3 px-4"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                  <td className="py-3 px-4"><Skeleton className="h-8 w-20 rounded-md" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
       {isError && (
-        <div className="flex items-center justify-center h-32">
-          <p className="text-red-600 text-sm">Erro ao carregar doutores.</p>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-700">Erro ao carregar doutores</p>
+            <p className="text-xs text-red-600 mt-0.5">Verifique sua conexão e tente novamente.</p>
+          </div>
         </div>
       )}
 
@@ -169,7 +200,7 @@ export function AgencyDoctorsPage() {
               <tbody>
                 {data.data.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-sm text-gray-400">
+                    <td colSpan={6} className="py-10 text-center text-sm text-amber-mid">
                       Nenhum doutor encontrado.
                     </td>
                   </tr>

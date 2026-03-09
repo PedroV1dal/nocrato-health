@@ -15,7 +15,7 @@
 **When** a requisição `GET /api/v1/doctor/patients` está em andamento
 **Then** cards skeleton (placeholders animados) são exibidos no lugar da lista real durante o carregamento
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -27,7 +27,7 @@
 **When** a requisição `GET /api/v1/doctor/appointments` está em andamento
 **Then** linhas skeleton animadas são exibidas na tabela durante o carregamento
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -39,7 +39,7 @@
 **When** a requisição falha (simulado via rede offline ou mock)
 **Then** mensagem de erro amigável ("Erro ao carregar dados") é exibida com opção de tentar novamente; nenhuma exceção não tratada aparece no console
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok — error state testado visualmente (red card com AlertTriangle, mensagem em português)
 
 ---
 
@@ -51,7 +51,7 @@
 **When** doutor acessa `/doctor/patients`
 **Then** mensagem "Nenhum paciente cadastrado" (ou equivalente) é exibida com ícone ou call-to-action — sem tabela vazia sem contexto
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok — "Nenhum paciente encontrado / Tente ajustar os filtros de busca." com ícone confirmado via Playwright
 
 ---
 
@@ -63,7 +63,7 @@
 **When** a página é carregada
 **Then** a sidebar lateral não ocupa largura fixa de 240px — está colapsada, oculta, ou substituída por menu hamburguer; o conteúdo principal ocupa a tela inteira
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok — sidebar colapsada por padrão em 375px, hamburguer (≡) no topo, overlay com backdrop ao abrir
 
 ---
 
@@ -75,7 +75,7 @@
 **When** acessa `/agency/doctors`
 **Then** layout não quebra horizontalmente; nenhum elemento fica cortado ou requer scroll horizontal
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok — `document.body.scrollWidth === 375`, sem overflow horizontal; tabela com `overflow-x: auto` interno
 
 ---
 
@@ -87,7 +87,7 @@
 **When** a página é aberta no browser
 **Then** o favicon aparece na aba do browser; nenhum erro 404 para `/favicon.ico` ou `/favicon.svg` no console de rede
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok — `/favicon.svg` retorna 200; `meta description` e `theme-color: #fabe01` presentes
 
 ---
 
@@ -103,7 +103,7 @@
 - Portal paciente → título diferenciado do padrão estático `"Nocrato Health"`
 - Booking público → título inclui nome do médico ou clínica
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok — "Nocrato — Portal do Médico", "Nocrato — Portal da Agência", "Nocrato — Portal de {nome}" (paciente dinâmico), "Agendar consulta — {nome do médico}" (booking)
 
 ---
 
@@ -182,7 +182,7 @@
 - Login no portal doutor funciona com doutor de seed
 - Acesso ao portal paciente funciona com código gerado pelo seed
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok — agency (admin@nocrato.com), doctor (test-done@nocrato.com / Doctor123!), patient portal (SEED01 → Maria Santos) todos funcionando
 
 ---
 

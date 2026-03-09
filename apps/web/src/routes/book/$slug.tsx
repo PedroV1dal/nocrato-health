@@ -490,6 +490,15 @@ export function BookingPage() {
     error: validateError,
   } = useQuery(validateTokenQueryOptions(slug ?? '', token))
 
+  React.useEffect(() => {
+    const doctorName = validateData?.doctor?.name
+    if (doctorName) {
+      document.title = `Agendar consulta — ${doctorName}`
+    } else {
+      document.title = 'Agendar consulta — Nocrato'
+    }
+  }, [validateData?.doctor?.name])
+
   // Sem token na URL → erro imediato
   if (!token) {
     return <TokenErrorScreen />

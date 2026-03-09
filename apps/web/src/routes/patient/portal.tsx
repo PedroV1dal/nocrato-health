@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { LogOut, Download, FileText, Calendar, User, Stethoscope } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 import {
   loadPatientSession,
@@ -70,13 +71,63 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
 
 // ─── Badge de status ──────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: AppointmentStatus }) {
+function StatusBadge({ status }: Readonly<{ status: AppointmentStatus }>) {
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-[#e8dfc8] text-amber-mid'}`}
     >
       {STATUS_LABELS[status] ?? status}
     </span>
+  )
+}
+
+// ─── Skeleton de carregamento ─────────────────────────────────────────────────
+
+function PortalSkeleton() {
+  return (
+    <div className="min-h-screen bg-cream">
+      <header className="border-b border-[#e8dfc8] bg-white sticky top-0 z-10">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-9 h-9 rounded-full" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </div>
+          <Skeleton className="h-8 w-16 rounded-md" />
+        </div>
+      </header>
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        <section>
+          <Skeleton className="h-4 w-24 mb-3" />
+          <div className="bg-white rounded-xl border border-[#e8dfc8] divide-y divide-[#e8dfc8]">
+            {['r1', 'r2', 'r3', 'r4'].map((k) => (
+              <div key={k} className="flex items-center justify-between px-4 py-3">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-4 w-36" />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section>
+          <Skeleton className="h-4 w-20 mb-3" />
+          <div className="space-y-3">
+            {['c1', 'c2'].map((k) => (
+              <div key={k} className="bg-white rounded-xl border border-[#e8dfc8] p-4 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </div>
   )
 }
 
@@ -91,7 +142,7 @@ export function PatientPortalPage() {
   React.useEffect(() => {
     const stored = loadPatientSession()
     if (!stored) {
-      void navigate({ to: '/patient/access', replace: true })
+      navigate({ to: '/patient/access', replace: true }).catch(() => undefined)
       return
     }
     setSession(stored)
@@ -100,7 +151,7 @@ export function PatientPortalPage() {
 
   function handleLogout() {
     clearPatientSession()
-    void navigate({ to: '/patient/access', replace: true })
+    navigate({ to: '/patient/access', replace: true }).catch(() => undefined)
   }
 
   function handleDownload(documentId: string) {
@@ -109,8 +160,16 @@ export function PatientPortalPage() {
     window.open(url, '_blank')
   }
 
+  React.useEffect(() => {
+    if (session) {
+      document.title = `Nocrato — Portal de ${session.data.patient.name}`
+    } else {
+      document.title = 'Nocrato — Portal do Paciente'
+    }
+  }, [session])
+
   // Aguarda verificação do sessionStorage antes de renderizar
-  if (!ready || !session) return null
+  if (!ready || !session) return <PortalSkeleton />
 
   const { patient, doctor, tenant, appointments, documents } = session.data
 
@@ -133,14 +192,14 @@ export function PatientPortalPage() {
               <img
                 src={tenant.logo_url}
                 alt={tenant.name}
-                className="h-9 w-auto object-contain flex-shrink-0"
+                className="h-9 w-auto object-contain shrink-0"
                 onError={(e) => {
                   ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                 }}
               />
             ) : (
               <div
-                className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold"
+                className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-white text-sm font-bold"
                 style={{ backgroundColor: primaryColor }}
               >
                 {tenant.name.charAt(0).toUpperCase()}
@@ -161,7 +220,7 @@ export function PatientPortalPage() {
             variant="ghost"
             size="sm"
             onClick={handleLogout}
-            className="flex-shrink-0 text-amber-mid hover:text-amber-dark gap-1.5"
+            className="shrink-0 text-amber-mid hover:text-amber-dark gap-1.5"
           >
             <LogOut className="w-4 h-4" />
             <span className="hidden sm:inline">Sair</span>
@@ -283,7 +342,7 @@ export function PatientPortalPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleDownload(doc.id)}
-                    className="flex-shrink-0 gap-1.5"
+                    className="shrink-0 gap-1.5"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Download
@@ -313,10 +372,10 @@ export function PatientPortalPage() {
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function DataRow({ label, value }: { label: string; value: string }) {
+function DataRow({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <span className="text-xs text-amber-mid font-medium flex-shrink-0">{label}</span>
+      <span className="text-xs text-amber-mid font-medium shrink-0">{label}</span>
       <span className="text-sm text-amber-dark text-right">{value}</span>
     </div>
   )
@@ -325,10 +384,10 @@ function DataRow({ label, value }: { label: string; value: string }) {
 function EmptyState({
   icon,
   message,
-}: {
+}: Readonly<{
   icon: React.ReactNode
   message: string
-}) {
+}>) {
   return (
     <div className="bg-white rounded-xl border border-[#e8dfc8] p-8 text-center space-y-2">
       <div className="flex justify-center">{icon}</div>

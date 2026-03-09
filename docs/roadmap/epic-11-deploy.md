@@ -12,15 +12,15 @@
 
 ---
 
-## US-11.1: Como usuario, quero uma experiencia fluida
+## ✅ US-11.1: Como usuario, quero uma experiencia fluida
 
 **Agentes:** `frontend` → `designer` → `qa`
 
-- [ ] Loading states (skeleton loaders em todas as listas)
-- [ ] Error states (toast notifications + error boundaries)
-- [ ] Empty states (mensagens amigaveis)
-- [ ] Responsive (sidebar collapse em mobile)
-- [ ] Favicon + meta tags + titulo dinamico por portal
+- [x] Loading states (skeleton loaders em todas as listas)
+- [x] Error states (toast notifications + error boundaries)
+- [x] Empty states (mensagens amigaveis)
+- [x] Responsive (sidebar collapse em mobile)
+- [x] Favicon + meta tags + titulo dinamico por portal
 
 ---
 

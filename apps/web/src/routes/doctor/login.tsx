@@ -50,18 +50,14 @@ export function DoctorLoginPage() {
         `/api/v1/doctor/auth/resolve-email/${encodeURIComponent(data.email)}`,
       )
 
-      if (res.hasPendingInvite) {
+      if ('hasPendingInvite' in res && res.hasPendingInvite) {
         setServerError(
           'Você tem um convite pendente. Verifique seu email para aceitar o convite.',
         )
         return
       }
 
-      if (!res.exists) {
-        setServerError('Nenhuma conta encontrada com esse email.')
-        return
-      }
-
+      // Sucesso: res é { slug, name } — doutor existe e pode fazer login
       setResolvedEmail(data.email)
       loginForm.setValue('email', data.email)
       setStep('password')

@@ -44,11 +44,9 @@ export interface DoctorInviteValidation {
   hasPendingInvite: boolean
 }
 
-export interface DoctorResolveEmailResponse {
-  exists: boolean
-  slug?: string
-  hasPendingInvite?: boolean
-}
+export type DoctorResolveEmailResponse =
+  | { slug: string; name: string }
+  | { hasPendingInvite: true }
 
 export interface RefreshResponse {
   accessToken: string
