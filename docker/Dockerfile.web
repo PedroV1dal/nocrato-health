@@ -26,7 +26,8 @@ ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
 # Gera build estático em apps/web/dist/
-RUN pnpm --filter @nocrato/web build
+# Usa tsconfig.app.json diretamente para excluir os arquivos e2e/
+RUN cd apps/web && npx tsc -p tsconfig.app.json --noEmit && npx vite build
 
 # ──────────────────────────────────────────────
 # Stage 2: runner
