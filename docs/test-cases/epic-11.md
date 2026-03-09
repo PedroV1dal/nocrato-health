@@ -167,7 +167,7 @@
 **When** `pnpm --filter @nocrato/api seed` é executado no terminal
 **Then** script finaliza sem erros; log indica criação dos registros: 1 admin, 2 doutores, 5 pacientes, 10 consultas, notas, documentos
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -194,7 +194,7 @@
 **When** `pnpm --filter @nocrato/api seed` é executado novamente
 **Then** script não lança erro de constraint unique; dados não são duplicados OU script detecta dados existentes e pula graciosamente
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 

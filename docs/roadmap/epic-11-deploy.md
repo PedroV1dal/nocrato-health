@@ -39,9 +39,9 @@
 
 **Agentes:** `backend` → `tech-lead`
 
-- [ ] Seed: 1 admin, 2 doutores, 5 pacientes, 10 consultas, notas, docs
-- [ ] Script: `pnpm --filter @nocrato/api seed`
-- [ ] **Criterio:** Dados de teste prontos em 1 comando
+- [x] Seed: 1 admin, 2 doutores, 5 pacientes, 10 consultas, notas, docs
+- [x] Script: `pnpm --filter @nocrato/api seed`
+- [x] **Criterio:** Dados de teste prontos em 1 comando
 
 ---
 
