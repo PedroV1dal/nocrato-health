@@ -23,6 +23,8 @@ import { DoctorAppointmentsPage } from './routes/doctor/appointments/index'
 import { DoctorAppointmentDetailPage } from './routes/doctor/appointments/$appointmentId'
 import { DoctorSettingsPage } from './routes/doctor/settings'
 import { BookingPage } from './routes/book/$slug'
+import { PatientAccessPage } from './routes/patient/access'
+import { PatientPortalPage } from './routes/patient/portal'
 import './app.css'
 
 // ─── Rotas públicas ──────────────────────────────────────────────────────────
@@ -183,6 +185,20 @@ const bookingRoute = createRoute({
   component: BookingPage,
 })
 
+// ─── Portal do paciente (sem JWT — autenticação via código em sessionStorage) ─
+
+const patientAccessRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patient/access',
+  component: PatientAccessPage,
+})
+
+const patientPortalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patient/portal',
+  component: PatientPortalPage,
+})
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -208,6 +224,8 @@ const routeTree = rootRoute.addChildren([
     doctorSettingsRoute,
   ]),
   bookingRoute,
+  patientAccessRoute,
+  patientPortalRoute,
 ])
 
 const router = createRouter({ routeTree })

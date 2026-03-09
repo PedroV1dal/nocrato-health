@@ -39,14 +39,14 @@
 
 ---
 
-## US-10.3: [FRONTEND] Portal do paciente
+## US-10.3: [FRONTEND] Portal do paciente ✅
 
 **Agentes:** `frontend` → `designer` → `qa`
 
-- [ ] routes/patient/access.tsx (form: digitar codigo)
-- [ ] routes/patient/portal.tsx (perfil read-only)
-  - [ ] Dados pessoais
-  - [ ] Historico de consultas (status, datas)
-  - [ ] Documentos (download)
-- [ ] Design limpo, mobile-first
-- [ ] **Criterio:** Paciente ve tudo, nao edita nada
+- [x] routes/patient/access.tsx (form: digitar codigo)
+- [x] routes/patient/portal.tsx (perfil read-only)
+  - [x] Dados pessoais
+  - [x] Historico de consultas (status, datas)
+  - [x] Documentos (download)
+- [x] Design limpo, mobile-first
+- [x] **Criterio:** Paciente ve tudo, nao edita nada
