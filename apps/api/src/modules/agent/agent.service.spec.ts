@@ -454,3 +454,152 @@ describe('AgentService', () => {
     expect(userMsg?.content).toBe('Boa tarde, preciso de informações')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Suite: @OnEvent handlers
+// ---------------------------------------------------------------------------
+
+describe('AgentService — @OnEvent handlers', () => {
+  let service: AgentService
+
+  // Mock Knex local para os handlers (busca direta na tabela patients)
+  const mockPatientsQB = {
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    first: jest.fn(),
+  }
+
+  const mockKnexHandlers = jest.fn().mockImplementation((table: string) => {
+    if (table === 'patients') return mockPatientsQB
+    if (table === 'agent_settings') return mockAgentSettingsQB
+    if (table === 'doctors') return mockDoctorQB
+    return mockAgentSettingsQB
+  })
+
+  const mockWhatsappSendText = mockWhatsAppService.sendText
+
+  beforeEach(async () => {
+    jest.clearAllMocks()
+
+    mockPatientsQB.first.mockResolvedValue({ phone: '+5511999999999', name: 'João' })
+
+    // Defaults para resolveTenantFromInstance e loadAgentContext (caso handleMessage seja chamado)
+    mockAgentSettingsQB.first
+      .mockResolvedValueOnce({ tenant_id: TENANT_ID })
+      .mockResolvedValueOnce(makeAgentSettings())
+    mockDoctorQB.first.mockResolvedValue(makeDoctorRow())
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        AgentService,
+        { provide: KNEX, useValue: mockKnexHandlers },
+        { provide: PatientService, useValue: mockPatientService },
+        { provide: BookingService, useValue: mockBookingService },
+        { provide: AppointmentService, useValue: mockAppointmentService },
+        { provide: ConversationService, useValue: mockConversationService },
+        { provide: WhatsAppService, useValue: mockWhatsAppService },
+      ],
+    }).compile()
+
+    service = module.get<AgentService>(AgentService)
+  })
+
+  // CT-94-01: onAppointmentCreated envia confirmação para o paciente
+  it('CT-94-01: onAppointmentCreated → envia mensagem de confirmação com data formatada', async () => {
+    await service.onAppointmentCreated({
+      tenantId: TENANT_ID,
+      patientId: 'patient-uuid-1',
+      phone: '+5511888880001',
+      dateTime: '2025-06-15T13:00:00.000Z',
+      patientName: 'Maria Silva',
+    })
+
+    expect(mockWhatsappSendText).toHaveBeenCalledTimes(1)
+    const [phone, message] = mockWhatsappSendText.mock.calls[0] as [string, string]
+    expect(phone).toBe('+5511888880001')
+    expect(message).toContain('Maria Silva')
+    expect(message).toContain('Sua consulta foi agendada para')
+    expect(message).toContain('Aguardamos você!')
+  })
+
+  // CT-94-02: onPortalActivated envia código de acesso
+  it('CT-94-02: onPortalActivated → envia mensagem com URL do portal e código de acesso', async () => {
+    await service.onPortalActivated({
+      tenantId: TENANT_ID,
+      patientId: 'patient-uuid-1',
+      phone: '+5511777770001',
+      portalAccessCode: 'ABC123',
+    })
+
+    expect(mockWhatsappSendText).toHaveBeenCalledTimes(1)
+    const [phone, message] = mockWhatsappSendText.mock.calls[0] as [string, string]
+    expect(phone).toBe('+5511777770001')
+    expect(message).toContain('http://localhost:5173/patient')
+    expect(message).toContain('ABC123')
+  })
+
+  // CT-94-03: onAppointmentStatusChanged com waiting envia notificação
+  it('CT-94-03: onAppointmentStatusChanged com newStatus=waiting → busca phone e envia mensagem', async () => {
+    await service.onAppointmentStatusChanged({
+      tenantId: TENANT_ID,
+      appointmentId: 'appt-uuid-001',
+      patientId: 'patient-uuid-1',
+      oldStatus: 'scheduled',
+      newStatus: 'waiting',
+    })
+
+    expect(mockPatientsQB.select).toHaveBeenCalledWith('phone', 'name')
+    expect(mockPatientsQB.where).toHaveBeenCalledWith({ id: 'patient-uuid-1', tenant_id: TENANT_ID })
+    expect(mockWhatsappSendText).toHaveBeenCalledTimes(1)
+    const [phone, message] = mockWhatsappSendText.mock.calls[0] as [string, string]
+    expect(phone).toBe('+5511999999999')
+    expect(message).toContain('consultório está pronto para te receber')
+  })
+
+  // CT-94-04: onAppointmentStatusChanged com outro status não envia mensagem
+  it('CT-94-04: onAppointmentStatusChanged com newStatus != waiting → retorna early sem enviar mensagem', async () => {
+    await service.onAppointmentStatusChanged({
+      tenantId: TENANT_ID,
+      appointmentId: 'appt-uuid-001',
+      patientId: 'patient-uuid-1',
+      oldStatus: 'scheduled',
+      newStatus: 'in_progress',
+    })
+
+    expect(mockWhatsappSendText).not.toHaveBeenCalled()
+    expect(mockPatientsQB.select).not.toHaveBeenCalled()
+  })
+
+  // CT-94-05: onAppointmentCancelled envia aviso com motivo
+  it('CT-94-05: onAppointmentCancelled com reason → envia mensagem com motivo', async () => {
+    await service.onAppointmentCancelled({
+      tenantId: TENANT_ID,
+      appointmentId: 'appt-uuid-002',
+      patientId: 'patient-uuid-1',
+      dateTime: '2025-06-20T10:00:00.000Z',
+      reason: 'Agenda lotada',
+    })
+
+    expect(mockWhatsappSendText).toHaveBeenCalledTimes(1)
+    const [phone, message] = mockWhatsappSendText.mock.calls[0] as [string, string]
+    expect(phone).toBe('+5511999999999')
+    expect(message).toContain('foi cancelada')
+    expect(message).toContain('Motivo: Agenda lotada')
+    expect(message).toContain('Em caso de dúvidas')
+  })
+
+  // CT-94-06: falha no WhatsApp não propaga exceção
+  it('CT-94-06: sendText rejeita → handler não propaga exceção', async () => {
+    mockWhatsappSendText.mockRejectedValueOnce(new Error('timeout'))
+
+    await expect(
+      service.onAppointmentCreated({
+        tenantId: TENANT_ID,
+        patientId: 'patient-uuid-1',
+        phone: '+5511888880001',
+        dateTime: '2025-06-15T13:00:00.000Z',
+        patientName: 'Maria Silva',
+      }),
+    ).resolves.toBeUndefined()
+  })
+})

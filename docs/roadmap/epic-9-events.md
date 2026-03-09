@@ -61,12 +61,15 @@
 
 ---
 
-## US-9.4: Como agente, quero notificar pacientes sobre eventos do portal
+## ✅ US-9.4: Como agente, quero notificar pacientes sobre eventos do portal
 
 **Agentes:** `backend` → `tech-lead` → `qa`
 
-- [ ] `@OnEvent('appointment.cancelled')` → envia WhatsApp com informacao do cancelamento
-- [ ] `@OnEvent('patient.portal_activated')` → envia codigo de acesso ao portal
-- [ ] `@OnEvent('appointment.status_changed')` onde `newStatus='waiting'` → notifica paciente
-- [ ] `@OnEvent('appointment.created')` → envia WhatsApp confirmando detalhes da consulta recém-agendada (via booking público ou in-chat)
-- [ ] **Criterio:** Paciente recebe confirmação imediata após agendamento e notificações automáticas sem latência (EventEmitter2, zero polling)
+- [x] `@OnEvent('appointment.cancelled')` → envia WhatsApp com informacao do cancelamento
+- [x] `@OnEvent('patient.portal_activated')` → envia codigo de acesso ao portal
+- [x] `@OnEvent('appointment.status_changed')` onde `newStatus='waiting'` → notifica paciente
+- [x] `@OnEvent('appointment.created')` → envia WhatsApp confirmando detalhes da consulta recém-agendada (via booking público ou in-chat)
+- [x] Fire-and-forget seguro: todos os handlers com try/catch — exceções logadas, nunca propagadas
+- [x] Knex direto com tenant isolation para busca de phone nos eventos que não carregam phone no payload
+- [x] 6 testes novos (CT-94-01 a CT-94-06) — total: 572/572
+- [x] **Criterio:** Paciente recebe confirmação imediata após agendamento e notificações automáticas sem latência (EventEmitter2, zero polling)

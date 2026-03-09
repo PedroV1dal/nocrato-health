@@ -235,7 +235,7 @@
 **When** doutor cancela a consulta via PATCH `/api/v1/doctor/appointments/:id/status` `{ status: "cancelled", reason: "Emergencia medica" }`
 **Then** evento `appointment.cancelled` recebido pelo `@OnEvent` no `AgentService`; `whatsappService.sendText()` chamado com mensagem contendo data da consulta e motivo
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -247,7 +247,7 @@
 **When** evento `patient.portal_activated` emitido (primeira consulta completada)
 **Then** `@OnEvent('patient.portal_activated')` recebe payload; `whatsappService.sendText()` chamado com mensagem contendo o codigo `XK9P2M` e URL do portal
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -259,7 +259,7 @@
 **When** doutor muda status para `waiting` via PATCH `.../status` `{ status: "waiting" }`
 **Then** `@OnEvent('appointment.status_changed')` recebe payload com `newStatus: "waiting"`; mensagem enviada ao paciente: `"O consultorio esta pronto para te receber! Por favor, dirija-se a recepcao."`
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -271,7 +271,7 @@
 **When** agendamento criado via booking publico ou in-chat, evento `appointment.created` emitido com `{ patientName, dateTime, phone }`
 **Then** `@OnEvent('appointment.created')` recebe payload; mensagem de confirmacao enviada ao paciente com nome e data formatada
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -283,7 +283,7 @@
 **When** doutor muda status para `in_progress`
 **Then** `@OnEvent('appointment.status_changed')` e chamado com `newStatus: "in_progress"`; nenhuma mensagem WhatsApp enviada (handler so age para `waiting`)
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok
 
 ---
 
@@ -295,4 +295,4 @@
 **When** evento `appointment.cancelled` e emitido e handler tenta enviar mensagem
 **Then** erro e logado internamente; nenhuma excecao propagada que quebre a transacao original ou o processo NestJS
 
-**Resultado atual:** [ ] ok  [ ] falhou
+**Resultado atual:** [x] ok

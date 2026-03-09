@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
+import { OnEvent } from '@nestjs/event-emitter'
 import type { Knex } from 'knex'
 import OpenAI from 'openai'
 import { KNEX } from '@/database/knex.provider'
@@ -397,6 +398,132 @@ export class AgentService {
     // 'both': todas as tools disponíveis
     return allTools
   }
+
+  // ---------------------------------------------------------------------------
+  // @OnEvent handlers — notificações proativas ao paciente via WhatsApp
+  // Todos são fire-and-forget seguro: exceções capturadas e logadas, nunca propagadas
+  // ---------------------------------------------------------------------------
+
+  @OnEvent('appointment.created')
+  async onAppointmentCreated(payload: {
+    tenantId: string
+    patientId: string
+    phone: string
+    dateTime: string
+    patientName: string
+  }): Promise<void> {
+    try {
+      const formatted = new Date(payload.dateTime).toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        dateStyle: 'short',
+        timeStyle: 'short',
+      })
+      const message = `Olá ${payload.patientName}! Sua consulta foi agendada para ${formatted}. Aguardamos você!`
+      await this.whatsappService.sendText(payload.phone, message)
+    } catch (err) {
+      this.logger.error(
+        'Erro ao enviar confirmação de agendamento via WhatsApp',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  @OnEvent('appointment.cancelled')
+  async onAppointmentCancelled(payload: {
+    tenantId: string
+    appointmentId: string
+    patientId: string
+    dateTime: string
+    reason?: string
+  }): Promise<void> {
+    try {
+      const row = await this.knex('patients')
+        .select('phone', 'name')
+        .where({ id: payload.patientId, tenant_id: payload.tenantId })
+        .first()
+
+      if (!row) {
+        this.logger.error(
+          'Paciente não encontrado para envio de cancelamento',
+          `patientId=${payload.patientId}`,
+        )
+        return
+      }
+
+      const formatted = new Date(payload.dateTime).toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        dateStyle: 'short',
+        timeStyle: 'short',
+      })
+      const motivo = payload.reason ? ` Motivo: ${payload.reason}` : ''
+      const message = `Olá! Sua consulta marcada para ${formatted} foi cancelada.${motivo} Em caso de dúvidas, entre em contato.`
+      await this.whatsappService.sendText(row.phone as string, message)
+    } catch (err) {
+      this.logger.error(
+        'Erro ao enviar aviso de cancelamento via WhatsApp',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  @OnEvent('appointment.status_changed')
+  async onAppointmentStatusChanged(payload: {
+    tenantId: string
+    appointmentId: string
+    patientId: string
+    oldStatus: string
+    newStatus: string
+    reason?: string
+  }): Promise<void> {
+    if (payload.newStatus !== 'waiting') {
+      return
+    }
+
+    try {
+      const row = await this.knex('patients')
+        .select('phone', 'name')
+        .where({ id: payload.patientId, tenant_id: payload.tenantId })
+        .first()
+
+      if (!row) {
+        this.logger.error(
+          'Paciente não encontrado para envio de notificação de status',
+          `patientId=${payload.patientId}`,
+        )
+        return
+      }
+
+      const message = `Olá! O consultório está pronto para te receber. Por favor, dirija-se à recepção.`
+      await this.whatsappService.sendText(row.phone as string, message)
+    } catch (err) {
+      this.logger.error(
+        'Erro ao enviar notificação de status via WhatsApp',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  @OnEvent('patient.portal_activated')
+  async onPortalActivated(payload: {
+    tenantId: string
+    patientId: string
+    phone: string
+    portalAccessCode: string
+  }): Promise<void> {
+    try {
+      const message = `Seu portal de saúde está pronto! Acesse ${env.FRONTEND_URL}/patient e use o código: ${payload.portalAccessCode}`
+      await this.whatsappService.sendText(payload.phone, message)
+    } catch (err) {
+      this.logger.error(
+        'Erro ao enviar código de acesso ao portal via WhatsApp',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // executeTool — helper privado do handleMessage
+  // ---------------------------------------------------------------------------
 
   /**
    * Executa uma tool call e retorna a mensagem de resultado no formato OpenAI.
