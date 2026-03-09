@@ -17,35 +17,30 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          CLEAN_HOST=$(printf '%s' "$VPS_HOST" | sed 's/[^a-zA-Z0-9.:_-]//g')
+          ssh-keyscan -H "$CLEAN_HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
         env:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
-          CLEAN_USER=$(printf '%s' "$VPS_USER" | tr -d '[:space:]')
-          CLEAN_HOST=$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')
-          ssh -i ~/.ssh/id_rsa -l "$CLEAN_USER" "$CLEAN_HOST" << 'EOF'
-            set -e
-
-            APP_DIR="/opt/nocrato-health-v2"
-            COMPOSE="docker compose -f $APP_DIR/docker/docker-compose.prod.yml --env-file $APP_DIR/.env"
-
-            echo "==> git pull"
-            cd $APP_DIR
-            git pull origin main
-
-            echo "==> build"
-            $COMPOSE build
-
-            echo "==> migrations"
-            $COMPOSE run --rm -e NODE_ENV=production api node dist/database/migrate.js
-
-            echo "==> up"
-            $COMPOSE up -d
-
-            echo "==> done"
-          EOF
+          CLEAN_USER=$(printf '%s' "$VPS_USER" | sed 's/[^a-zA-Z0-9._-]//g')
+          CLEAN_HOST=$(printf '%s' "$VPS_HOST" | sed 's/[^a-zA-Z0-9.:_-]//g')
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -l "$CLEAN_USER" "$CLEAN_HOST" /bin/bash << 'DEPLOY'
+set -e
+APP_DIR="/opt/nocrato-health-v2"
+COMPOSE="docker compose -f $APP_DIR/docker/docker-compose.prod.yml --env-file $APP_DIR/.env"
+echo "==> git pull"
+cd $APP_DIR
+git pull origin main
+echo "==> build"
+$COMPOSE build
+echo "==> migrations"
+$COMPOSE run --rm -e NODE_ENV=production api node dist/database/migrate.js
+echo "==> up"
+$COMPOSE up -d
+echo "==> done"
+DEPLOY
