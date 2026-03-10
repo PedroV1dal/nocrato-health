@@ -244,6 +244,7 @@ Registro centralizado de débitos técnicos com ID sequencial (`TD-NN`), módulo
 | `designer.md`  | Design system, Tailwind, shadcn/ui, design tokens            |
 | `devops.md`    | Docker, Nginx, CI/CD, Hetzner, variáveis de ambiente         |
 | `qa.md`        | Testes, critérios de aceitação, edge cases                   |
+| `security.md`  | Auditoria de segurança: OWASP Top 10, tenant isolation, JWT  |
 
 ---
 
