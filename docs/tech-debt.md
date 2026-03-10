@@ -21,14 +21,11 @@ Formato de prioridade: **P1** (antes do deploy) · **P2** (antes de escalar) · 
 
 ---
 
-### TD-02 — Seed de dados realista ausente
+### ~~TD-02 — Seed de dados realista ausente~~ ✅ RESOLVIDO
 **Módulo:** `database`
 **Identificado em:** Revisão pós-Epic 5
-**Prioridade:** P1
 
-O seed atual (`seed.ts`) cria apenas admin da agência. Falta um doutor completo (onboarding concluído, agent_settings configurado, working_hours preenchido), paciente de exemplo e booking token válido para testar o fluxo completo em produção.
-
-**Fix:** Expandir `apps/api/src/database/seed.ts` com fixture realista de ponta a ponta.
+**Resolvido em:** `seed.ts` expandido com fixture completo de ponta a ponta: 2 tenants, 2 doutores, 5 pacientes, 10 consultas (todos os status), 3 notas clínicas, 2 documentos, 1 booking_token (válido 24h, phone pré-preenchido), 1 conversa de exemplo (4 mensagens). `agent_settings` da Dra. Ana inclui `evolution_instance_name='dr-ana-silva-instance'` (suporte ao TD-20), `personality`, `appointment_rules` e `faq`.
 
 ---
 
@@ -248,12 +245,11 @@ Se o usuário desativar todos os dias na `ScheduleSection` de settings e salvar,
 
 ---
 
-### TD-22 — Instância OpenAI criada por mensagem recebida
+### ~~TD-22 — Instância OpenAI criada por mensagem recebida~~ ✅ RESOLVIDO
 **Módulo:** `agent`
 **Identificado em:** US-9.3 (OBS-TL-2 tech-lead)
-**Prioridade:** P3
 
-`new OpenAI({ apiKey: env.OPENAI_API_KEY })` é instanciado dentro de `handleMessage` a cada chamada. Melhor instanciar como campo `private readonly openai` no constructor.
+**Resolvido em:** `new OpenAI({ apiKey: env.OPENAI_API_KEY })` movido de dentro de `handleMessage` para `private readonly openai: OpenAI` inicializado no constructor de `AgentService`. Todos os 22 testes do agent.service.spec.ts passando.
 
 ---
 

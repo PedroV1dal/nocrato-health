@@ -52,6 +52,7 @@ const MAX_TOOL_ITERATIONS = 5
 @Injectable()
 export class AgentService {
   private readonly logger = new Logger(AgentService.name)
+  private readonly openai: OpenAI
 
   constructor(
     @Inject(KNEX) private readonly knex: Knex,
@@ -60,7 +61,9 @@ export class AgentService {
     private readonly appointmentService: AppointmentService,
     private readonly conversationService: ConversationService,
     private readonly whatsappService: WhatsAppService,
-  ) {}
+  ) {
+    this.openai = new OpenAI({ apiKey: env.OPENAI_API_KEY })
+  }
 
   // ---------------------------------------------------------------------------
   // handleMessage — ponto de entrada para cada mensagem recebida via webhook
@@ -118,13 +121,11 @@ export class AgentService {
     ]
 
     // 8. Chamar OpenAI com tools
-    const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY })
-
     let response: OpenAI.Chat.Completions.ChatCompletion
     let iterations = 0
 
     try {
-      response = await openai.chat.completions.create({
+      response = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [{ role: 'system', content: systemPrompt }, ...openaiMessages],
         tools: this.getTools(agentCtx.bookingMode),
@@ -162,7 +163,7 @@ export class AgentService {
 
       // Nova chamada ao LLM com os resultados das tools
       try {
-        response = await openai.chat.completions.create({
+        response = await this.openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },

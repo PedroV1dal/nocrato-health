@@ -110,10 +110,20 @@ async function runSeed() {
 
     await db.raw(
       `INSERT INTO agent_settings
-         (tenant_id, enabled, booking_mode, welcome_message)
-       VALUES (?, ?, ?, ?)
+         (tenant_id, enabled, booking_mode, welcome_message, evolution_instance_name,
+          personality, appointment_rules, faq)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (tenant_id) DO NOTHING`,
-      [anaTenantId, true, 'both', 'Olá! Sou a assistente da Dra. Ana Silva.'],
+      [
+        anaTenantId,
+        true,
+        'both',
+        'Olá! Sou a assistente da Dra. Ana Silva. Como posso ajudar?',
+        'dr-ana-silva-instance',
+        'Atenciosa, empática e profissional. Use linguagem acessível e evite termos técnicos desnecessários.',
+        'Consultas de 30 minutos. Sem atendimento às sextas-feiras à tarde. Chegue 10 minutos antes do horário.',
+        'P: Preciso de encaminhamento?\nR: Consulte a doutora — ela pode emitir encaminhamentos se necessário.\n\nP: Atende convênio?\nR: No momento apenas particular.',
+      ],
     )
 
     counts.tenants += 1
@@ -374,6 +384,33 @@ async function runSeed() {
       }
     }
 
+    // ── 8. Booking token (tenant Dra. Ana, phone do paciente 1) ──────────────
+    const seedToken = 'seed-booking-token-0000000000000000000000000000000000000'
+    const existingToken = await db('booking_tokens').where({ token: seedToken }).first()
+    if (!existingToken) {
+      await db('booking_tokens').insert({
+        tenant_id: anaTenantId,
+        token: seedToken,
+        phone: '+5511888880001',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        used: false,
+      })
+    }
+
+    // ── 9. Conversa de exemplo (tenant Dra. Ana, phone do paciente 3) ────────
+    const sampleMessages = JSON.stringify([
+      { role: 'user',      content: 'Olá, gostaria de agendar uma consulta.',           timestamp: hoursAgo(2) },
+      { role: 'assistant', content: 'Olá! Claro, que dia você prefere?',                timestamp: hoursAgo(2) },
+      { role: 'user',      content: 'Semana que vem, de manhã.',                         timestamp: hoursAgo(2) },
+      { role: 'assistant', content: 'Vou verificar os horários disponíveis para você!',  timestamp: hoursAgo(2) },
+    ])
+    await db.raw(
+      `INSERT INTO conversations (tenant_id, phone, messages, last_message_at)
+       VALUES (?, ?, ?::jsonb, ?)
+       ON CONFLICT (tenant_id, phone) DO NOTHING`,
+      [anaTenantId, '+5511888880003', sampleMessages, hoursAgo(2)],
+    )
+
     // ── Log final ─────────────────────────────────────────────────────────────
     console.log('\nSeed concluido. Registros inseridos nesta execucao:')
     console.log(`  agency_members : ${counts.agency_members}`)
@@ -389,6 +426,9 @@ async function runSeed() {
     console.log('  ana.silva@nocrato.com     / Doctor123!  (onboarding completo, slug: dr-ana-silva)')
     console.log('  carlos.mendes@nocrato.com / Doctor123!  (onboarding incompleto, slug: dr-carlos-mendes)')
     console.log('\nCodigos de acesso portal paciente: SEED01 a SEED05')
+    console.log('\nBooking token (valido 24h):')
+    console.log('  /book/dr-ana-silva?token=seed-booking-token-0000000000000000000000000000000000000')
+    console.log('\nEvolution instance da Dra. Ana: dr-ana-silva-instance')
   } finally {
     await db.destroy()
   }
