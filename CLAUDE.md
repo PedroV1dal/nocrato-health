@@ -182,7 +182,7 @@ Consulte `.claude/agents/qa.md` — seção "Playwright via MCP". Resumo: roda l
 | ------------------------ | ------------------------------------------------------------- |
 | `schema.sql`             | DDL completo das 12 tabelas — fonte de verdade do schema      |
 | `entity-relationship.md` | Diagrama ER, relacionamentos, modelo de isolamento por tenant |
-| `migrations.md`          | Ordem das 14 migrations, DAG de dependências, índices         |
+| `migrations.md`          | Ordem das 16 migrations, DAG de dependências, índices         |
 
 ### `docs/flows/`
 
@@ -220,6 +220,12 @@ Consulte `.claude/agents/qa.md` — seção "Playwright via MCP". Resumo: roda l
 
 Os epic docs referenciam o arquivo via `> **Casos de teste:** [docs/test-cases/epic-N.md](...)`.
 Gerados pela skill `/test-cases` antes da etapa de QA de cada US.
+
+### `docs/security/`
+
+| Arquivo           | Conteúdo                                                      |
+| ----------------- | ------------------------------------------------------------- |
+| `audit-report.md` | Relatório de auditoria OWASP: findings SEC-NN por severidade  |
 
 ### `docs/tech-debt.md`
 
