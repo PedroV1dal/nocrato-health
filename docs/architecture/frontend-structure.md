@@ -10,52 +10,51 @@ The frontend is a single-page application built with **Vite + React 19 + TanStac
 
 ```
 apps/web/src/
-├── main.tsx
-├── app.css
+├── main.tsx                    # Entry point: code-based router + QueryClientProvider
+├── app.css                     # @import "tailwindcss" + @theme com design tokens
 ├── lib/
-│   ├── api-client.ts           # fetch wrapper with auth
-│   ├── auth.tsx                # AuthContext (agency vs doctor)
-│   ├── query-client.ts
-│   └── utils.ts                # cn() helper
+│   ├── api-client.ts           # fetch wrapper: auto-inject token, auto-refresh 401
+│   ├── auth.ts                 # Zustand store: accessToken, refreshToken, user, userType
+│   ├── query-client.ts         # TanStack Query (refetchInterval: 30s)
+│   ├── utils.ts                # cn() helper (clsx + tailwind-merge)
+│   └── queries/                # TanStack Query hooks por domínio
+│       ├── agency.ts
+│       ├── doctor.ts
+│       ├── patients.ts
+│       ├── appointments.ts
+│       ├── clinical.ts
+│       ├── booking.ts
+│       └── patient-portal.ts
 ├── types/
-│   └── api.ts                  # DTOs
-├── hooks/
-│   ├── use-patients.ts
-│   ├── use-appointments.ts
-│   ├── use-clinical-notes.ts
-│   └── use-documents.ts
+│   └── api.ts                  # DTOs das respostas do backend
 ├── components/
-│   ├── ui/                     # shadcn/ui
-│   ├── app-sidebar.tsx
-│   ├── data-table.tsx
-│   └── page-header.tsx
+│   └── ui/                     # shadcn/ui + componentes customizados
 └── routes/
     ├── __root.tsx
     ├── agency/
     │   ├── login.tsx            # Agency member login
+    │   ├── reset-password.tsx   # Forgot/reset password
     │   ├── _layout.tsx          # Auth guard + agency sidebar
-    │   ├── _layout/
-    │   │   ├── index.tsx        # Agency dashboard
-    │   │   ├── doctors/
-    │   │   │   ├── index.tsx    # Doctor list + invite
-    │   │   │   └── $doctorId.tsx # Doctor profile view
-    │   │   └── members/
-    │   │       └── index.tsx    # Member list
+    │   ├── dashboard.tsx        # Agency dashboard (doctors, members stats)
+    │   ├── doctors/
+    │   │   ├── index.tsx        # Doctor list + invite
+    │   │   └── $doctorId.tsx    # Doctor profile view
+    │   └── members/
+    │       └── index.tsx        # Member list
     ├── doctor/
-    │   ├── login.tsx            # Doctor login (email -> slug -> password)
-    │   ├── invite.tsx           # Accept invite (create slug + password)
-    │   ├── _layout.tsx          # Auth guard + doctor sidebar
-    │   ├── _layout/
-    │   │   ├── index.tsx        # Clinic dashboard
-    │   │   ├── onboarding.tsx   # Post-invite wizard
-    │   │   ├── patients/
-    │   │   │   ├── index.tsx
-    │   │   │   └── $patientId.tsx
-    │   │   ├── appointments/
-    │   │   │   ├── index.tsx
-    │   │   │   └── $appointmentId.tsx
-    │   │   └── settings/
-    │   │       └── index.tsx    # Profile + agent config
+    │   ├── login.tsx            # Doctor login (email → resolve slug → senha)
+    │   ├── invite.tsx           # Accept invite (token na URL)
+    │   ├── reset-password.tsx   # Forgot/reset password
+    │   ├── _layout.tsx          # Auth guard + doctor sidebar + onboarding redirect
+    │   ├── dashboard.tsx        # Today's appointments, stats
+    │   ├── onboarding.tsx       # Post-invite wizard (4 steps)
+    │   ├── settings.tsx         # Profile, schedule, branding, agent config
+    │   ├── patients/
+    │   │   ├── index.tsx        # Patient list (search + filter)
+    │   │   └── $patientId.tsx   # Patient profile (tabs: info, consultas, notas, docs)
+    │   └── appointments/
+    │       ├── index.tsx        # Appointment list (filter by status/date)
+    │       └── $appointmentId.tsx # Appointment detail (status, notes, summary)
     ├── patient/
     │   ├── access.tsx           # Enter access code
     │   └── portal.tsx           # Read-only profile
@@ -65,26 +64,26 @@ apps/web/src/
 
 ---
 
-## Routing Strategy: TanStack Router (File-Based)
+## Routing Strategy: TanStack Router (Code-Based)
 
-The frontend uses **TanStack Router** with file-based routing. This means the route structure is defined by the file system layout inside the `routes/` directory, providing full type safety for route parameters, search params, and navigation.
+The frontend uses **TanStack Router** with **code-based routing**. As rotas são declaradas diretamente em `main.tsx` usando `createRoute()` — não há geração automática de `routeTree.gen.ts`. Isso garante type safety total sem dependência de um passo de build adicional.
 
-### How File-Based Routing Works
+### Como o roteamento code-based funciona
 
-| File Pattern | Route Path | Purpose |
-|-------------|------------|---------|
-| `routes/__root.tsx` | `/` | Root layout (wraps all routes) |
-| `routes/agency/login.tsx` | `/agency/login` | Standalone page (no layout wrapper) |
-| `routes/agency/_layout.tsx` | `/agency/*` | Layout route (auth guard + sidebar, wraps children) |
-| `routes/agency/_layout/index.tsx` | `/agency` | Index page inside layout |
-| `routes/agency/_layout/doctors/$doctorId.tsx` | `/agency/doctors/:doctorId` | Dynamic parameter route |
-| `routes/book/$slug.tsx` | `/book/:slug` | Dynamic public route |
+| Padrão | Rota | Propósito |
+|--------|------|-----------|
+| `createRootRoute()` | `/` | Root layout (providers, error boundaries) |
+| `createRoute({ path: '/agency/login' })` | `/agency/login` | Página standalone (sem layout wrapper) |
+| `createRoute({ id: 'doctor-layout' })` | `/doctor/*` | Layout route (auth guard + sidebar, wraps children) |
+| `createRoute({ path: '/doctor/dashboard' })` | `/doctor/dashboard` | Página dentro do layout |
+| `createRoute({ path: '/doctor/patients/$patientId' })` | `/doctor/patients/:patientId` | Rota dinâmica |
+| `createRoute({ path: '/book/$slug' })` | `/book/:slug` | Rota pública dinâmica |
 
 ### Key Conventions
 
 - **`_layout.tsx`** files define layout routes that wrap their children with shared UI (sidebar, auth guards). The underscore prefix means the segment does not appear in the URL.
-- **`$param.tsx`** files define dynamic route segments. `$doctorId` becomes `:doctorId` in the URL and is available as a typed parameter.
-- **`index.tsx`** files define the default page for a directory.
+- **`$param.tsx`** files use the `$` prefix for dynamic parameters (`$patientId`, `$appointmentId`, `$slug`).
+- Todas as rotas são registradas no `routeTree` em `main.tsx` — adicionar uma rota nova requer atualizar o `main.tsx`.
 - **`__root.tsx`** defines the application root layout (providers, global error boundaries).
 
 ---
@@ -172,21 +171,24 @@ A `fetch` wrapper that handles:
 - Base URL configuration
 - JSON serialization/deserialization
 
-### `lib/auth.tsx`
+### `lib/auth.ts`
 
-An `AuthContext` that manages authentication state for both agency and doctor portals. It stores tokens, provides login/logout functions, and exposes the current user.
+Zustand store persistido em `localStorage` (key: `nocrato-auth`). Armazena `accessToken`, `refreshToken`, `user`, `userType`, `tenantId`, `onboardingCompleted`. Actions: `setAuth()`, `clearAuth()`, `updateTokens()`. Não usa React Context.
 
 ### `lib/query-client.ts`
 
 TanStack Query client configured with sensible defaults including `refetchInterval: 30000` (30 seconds) for near-real-time data updates across the application.
 
-### `hooks/`
+### `lib/queries/`
 
-Custom hooks built on TanStack Query for each domain entity:
-- `use-patients.ts` - CRUD operations and queries for patients
-- `use-appointments.ts` - Appointment listing, creation, and status updates
-- `use-clinical-notes.ts` - Note creation and retrieval
-- `use-documents.ts` - Document listing and upload
+TanStack Query hooks por domínio (queries + mutations). Organizados por entidade:
+- `patients.ts` — CRUD de pacientes, perfil completo
+- `appointments.ts` — listagem, criação, transições de status, dashboard
+- `clinical.ts` — criação de notas clínicas, upload de documentos
+- `doctor.ts` — onboarding, perfil, schedule, branding, agent settings
+- `agency.ts` — gestão de membros, doutores, convites
+- `booking.ts` — validação de token, slots, agendamento público
+- `patient-portal.ts` — acesso via código, dados read-only
 
 ### `components/ui/`
 

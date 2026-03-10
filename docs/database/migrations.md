@@ -2,7 +2,7 @@
 
 ## Migration Order
 
-The schema is split into 14 sequential migration files. The ordering strictly respects foreign key dependencies: each migration only references tables created in earlier migrations.
+The schema is split into 16 sequential migration files. The ordering strictly respects foreign key dependencies: each migration only references tables created in earlier migrations.
 
 | # | Migration File | Table/Object Created | FK Dependencies |
 |---|---------------|---------------------|-----------------|
@@ -59,6 +59,10 @@ The dependency ordering can be visualized as a directed acyclic graph (DAG). An 
  +---> 013 conversations    (depends on: tenants)
  |
  +---> 014 alter agent_settings (add booking_mode column)
+ |
+ +---> 015 alter doctors (crm/crm_state → nullable; working_hours DEFAULT → NULL)
+ |
+ +---> 016 alter agent_settings (add evolution_instance_name column)
 ```
 
 ### Critical Ordering Constraints

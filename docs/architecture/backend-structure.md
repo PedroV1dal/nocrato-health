@@ -19,7 +19,7 @@ apps/api/src/
 │   ├── database.module.ts          # KnexModule provider
 │   ├── knex.provider.ts            # Knex instance factory
 │   ├── knexfile.ts                 # Connection config
-│   └── migrations/                 # 001_ to 011_ (SQL)
+│   └── migrations/                 # 001_ to 016_
 ├── common/
 │   ├── decorators/
 │   │   ├── roles.decorator.ts      # @Roles('agency_admin', 'doctor')
@@ -128,10 +128,6 @@ apps/api/src/
 │   │   │                           #   POST /api/v1/public/booking/:slug/book { token, name, phone, slot }
 │   │   └── dto/
 │   │       └── book-appointment.dto.ts
-│   ├── upload/
-│   │   ├── upload.module.ts
-│   │   ├── upload.service.ts       # Saves to ./uploads/{tenantId}/, returns URL
-│   │   └── upload.controller.ts    # POST /api/v1/doctor/upload (multipart)
 │   └── agent/
 │       ├── agent.module.ts
 │       ├── agent.service.ts        # Orquestracao: processa mensagem → LLM → resposta
@@ -177,7 +173,6 @@ apps/api/src/
 | `agent-settings` | Doctor | WhatsApp agent configuration (welcome message, personality, FAQ, booking mode). |
 | `event-log` | System | Audit trail append-only. Registra todas as acoes relevantes para debugging e historico. Nao exposto externamente. |
 | `booking` | Public (token) | Public appointment booking with temporary tokens and rate limiting. Tambem expoe `generateToken()` para o modulo `agent`. |
-| `upload` | Doctor | Multipart file upload to local disk (`./uploads/{tenantId}/`). |
 | `agent` | Evolution API (webhook) | Modulo do agente WhatsApp. Recebe webhooks da Evolution API, gerencia estado de conversa, chama LLM, e envia respostas. Subscreve eventos internos via `EventEmitter2`. |
 
 ---
