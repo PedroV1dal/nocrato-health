@@ -40,14 +40,12 @@ Não há `--coverageThreshold` no Jest config. A cobertura pode cair silenciosam
 
 ---
 
-### TD-04 — CI não configurado (GitHub Actions)
+### ~~TD-04 — CI não configurado (GitHub Actions)~~ ✅ RESOLVIDO
 **Módulo:** `infra`
 **Identificado em:** Revisão pós-Epic 5
 **Prioridade:** P1
 
-Não há pipeline de CI. Testes Jest e Playwright só rodam localmente.
-
-**Fix:** Criar `.github/workflows/ci.yml` com steps: `pnpm install` → `tsc --noEmit` → `jest` → `playwright test`.
+`.github/workflows/ci.yml` criado com `pnpm install` → `turbo typecheck` → `turbo test` (jest). Playwright permanece local — CI com E2E requer stack completa (DB + API + web) e é desproporcional para solo dev MVP.
 
 ---
 
