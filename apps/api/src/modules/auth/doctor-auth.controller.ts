@@ -1,5 +1,6 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common'
+import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common'
 import { ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler'
 import { DoctorAuthService } from './doctor-auth.service'
 import { AcceptDoctorInviteSchema, type AcceptDoctorInviteDto } from './dto/accept-doctor-invite.dto'
 import { DoctorLoginSchema, type DoctorLoginDto } from './dto/doctor-login.dto'
@@ -48,8 +49,10 @@ export class DoctorAuthController {
     return this.doctorAuthService.acceptDoctorInvite(dto.token, dto.name, dto.password, dto.slug)
   }
 
-  // US-1.6: Resolver email antes do login (retorna slug ou hasPendingInvite)
+  // US-1.6: Resolver email antes do login (retorna slug ou hasPendingInvite) — SEC-08
   @Get('resolve-email/:email')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Resolver email antes do login — retorna slug do portal ou flag de convite pendente' })
   @ApiParam({ name: 'email', description: 'Email do doutor', example: 'dr@clinica.com' })
   @ApiResponse({ status: 200, description: 'Retorna { slug } ou { hasPendingInvite: true }' })
@@ -58,8 +61,10 @@ export class DoctorAuthController {
     return this.doctorAuthService.resolveEmail(email)
   }
 
-  // US-1.6: Login do doutor
+  // US-1.6: Login do doutor — SEC-09
   @Post('login')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Login do doutor' })
   @ApiBody({
     schema: {
@@ -78,8 +83,10 @@ export class DoctorAuthController {
     return this.doctorAuthService.loginDoctor(dto.email, dto.password)
   }
 
-  // US-1.7: Solicitar redefinição de senha
+  // US-1.7: Solicitar redefinição de senha — SEC-09
   @Post('forgot-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Solicitar redefinição de senha do doutor por email' })
   @ApiBody({
     schema: {
@@ -96,8 +103,10 @@ export class DoctorAuthController {
     return this.doctorAuthService.forgotPassword(dto.email)
   }
 
-  // US-1.7: Redefinir senha com token
+  // US-1.7: Redefinir senha com token — SEC-09
   @Post('reset-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Redefinir senha do doutor com token recebido por email' })
   @ApiBody({
     schema: {

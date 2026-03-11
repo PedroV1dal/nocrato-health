@@ -1,5 +1,6 @@
-import { Controller, Post, Body } from '@nestjs/common'
+import { Controller, Post, Body, UseGuards } from '@nestjs/common'
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler'
 import { AgencyAuthService } from './agency-auth.service'
 import { AgencyLoginSchema, type AgencyLoginDto } from './dto/agency-login.dto'
 import { ForgotPasswordSchema, type ForgotPasswordDto } from './dto/forgot-password.dto'
@@ -12,8 +13,10 @@ import { ZodValidationPipe } from '@/common/pipes/zod-validation.pipe'
 export class AgencyAuthController {
   constructor(private readonly agencyAuthService: AgencyAuthService) {}
 
-  // US-1.1: Login da agência
+  // US-1.1: Login da agência — SEC-09
   @Post('login')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Login de membro da agência' })
   @ApiBody({
     schema: {
@@ -32,8 +35,10 @@ export class AgencyAuthController {
     return this.agencyAuthService.loginAgency(dto.email, dto.password)
   }
 
-  // US-1.7: Solicitar redefinição de senha
+  // US-1.7: Solicitar redefinição de senha — SEC-09
   @Post('forgot-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Solicitar redefinição de senha por email' })
   @ApiBody({
     schema: {
@@ -50,8 +55,10 @@ export class AgencyAuthController {
     return this.agencyAuthService.forgotPassword(dto.email)
   }
 
-  // US-1.7: Redefinir senha com token
+  // US-1.7: Redefinir senha com token — SEC-09
   @Post('reset-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Redefinir senha com token recebido por email' })
   @ApiBody({
     schema: {

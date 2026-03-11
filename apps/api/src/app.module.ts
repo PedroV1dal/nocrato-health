@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { EventEmitterModule } from '@nestjs/event-emitter'
+import { ThrottlerModule } from '@nestjs/throttler'
 import { DatabaseModule } from './database/database.module'
 import { EventLogModule } from './modules/event-log/event-log.module'
 import { AuthModule } from './modules/auth/auth.module'
@@ -16,6 +17,7 @@ import { HealthController } from './modules/health/health.controller'
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 60 }]),
     EventEmitterModule.forRoot(),
     DatabaseModule,
     EventLogModule,

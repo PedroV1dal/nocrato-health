@@ -12,7 +12,11 @@ async function bootstrap() {
   })
 
   app.use(helmet())
-  app.enableCors()
+  app.enableCors({
+    origin: env.NODE_ENV === 'production' ? env.FRONTEND_URL : ['http://localhost:5173', env.FRONTEND_URL],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  })
   app.setGlobalPrefix('api/v1', { exclude: ['health'] })
   app.useGlobalFilters(new HttpExceptionFilter())
 

@@ -91,8 +91,9 @@ O risco mais urgente é a ausência de `Content-Security-Policy` no Nginx (SEC-0
 
 ### MEDIUM
 
-#### SEC-04 — Código de acesso do paciente sem rate limiting na camada de aplicação
+#### SEC-04 — Código de acesso do paciente sem rate limiting na camada de aplicação ✅ RESOLVIDO
 - **Severidade:** MEDIUM
+- **Fix:** `dto/get-portal-access.dto.ts` — regex `^[A-Z]{3}-\d{4}-[A-Z]{3}$` valida formato. `patient-portal.controller.ts` — `@UseGuards(ThrottlerGuard) @Throttle({ default: { limit: 5, ttl: 900000 } })` no método `access()`.
 - **Módulo:** `apps/api/src/modules/patient/patient-portal.controller.ts:25-43`; `apps/api/src/modules/patient/dto/get-portal-access.dto.ts:1-7`
 - **Evidência:**
   ```typescript
@@ -113,8 +114,9 @@ O risco mais urgente é a ausência de `Content-Security-Policy` no Nginx (SEC-0
 
 ---
 
-#### SEC-05 — CORS completamente aberto (`app.enableCors()` sem restrições)
+#### SEC-05 — CORS completamente aberto (`app.enableCors()` sem restrições) ✅ RESOLVIDO
 - **Severidade:** MEDIUM
+- **Fix:** `apps/api/src/main.ts` — whitelist por `FRONTEND_URL` em produção; `localhost:5173` + `FRONTEND_URL` em dev. `credentials: true`, métodos explícitos.
 - **Módulo:** `apps/api/src/main.ts:13`
 - **Evidência:**
   ```typescript
@@ -133,8 +135,9 @@ O risco mais urgente é a ausência de `Content-Security-Policy` no Nginx (SEC-0
 
 ---
 
-#### SEC-06 — Entropia mínima insuficiente para JWT_SECRET (aceita 16 chars)
+#### SEC-06 — Entropia mínima insuficiente para JWT_SECRET (aceita 16 chars) ✅ RESOLVIDO
 - **Severidade:** MEDIUM
+- **Fix:** `apps/api/src/config/env.ts` — `JWT_SECRET` e `JWT_REFRESH_SECRET` agora exigem `min(64)`.
 - **Módulo:** `apps/api/src/config/env.ts:23-24`
 - **Evidência:**
   ```typescript
@@ -171,8 +174,10 @@ O risco mais urgente é a ausência de `Content-Security-Policy` no Nginx (SEC-0
 
 ---
 
-#### SEC-08 — Endpoint público `/doctor/auth/resolve-email/:email` enumera emails e dados de clínicas
+#### SEC-08 — Endpoint público `/doctor/auth/resolve-email/:email` enumera emails e dados de clínicas ✅ RESOLVIDO (parcial)
 - **Severidade:** MEDIUM
+- **Fix aplicado:** `doctor-auth.controller.ts` — `@UseGuards(ThrottlerGuard) @Throttle({ default: { limit: 10, ttl: 60000 } })` no método `resolveEmail()`. Rate limit de 10 req/min por IP implementado.
+- **Pendente:** normalização da resposta (retornar erro genérico sem distinguir "não existe" de "convite pendente") — requer mudança no service e impacta UX do fluxo de login do doutor; aceito como trade-off MVP.
 - **Módulo:** `apps/api/src/modules/auth/doctor-auth.controller.ts:51-58`
 - **Evidência:**
   ```typescript
@@ -188,8 +193,9 @@ O risco mais urgente é a ausência de `Content-Security-Policy` no Nginx (SEC-0
 
 ---
 
-#### SEC-09 — Ausência de rate limiting em endpoints de login e reset de senha (camada aplicação)
+#### SEC-09 — Ausência de rate limiting em endpoints de login e reset de senha (camada aplicação) ✅ RESOLVIDO
 - **Severidade:** MEDIUM
+- **Fix:** `agency-auth.controller.ts` e `doctor-auth.controller.ts` — `@UseGuards(ThrottlerGuard) @Throttle({ default: { limit: 5, ttl: 900000 } })` aplicado em `login`, `forgot-password` e `reset-password`. `ThrottlerModule.forRoot()` registrado em `app.module.ts`.
 - **Módulo:** `apps/api/src/modules/auth/agency-auth.controller.ts:16-33`; `apps/api/src/modules/auth/doctor-auth.controller.ts:62-79`
 - **Evidência:** Os endpoints `POST /agency/auth/login`, `POST /doctor/auth/login`, `POST /*/auth/forgot-password` e `POST /*/auth/reset-password` não possuem `@Throttle()` nem qualquer middleware de rate limiting além do Nginx.
 - **Descrição:** O rate limiting do Nginx (`api_general: 30r/m`) aplica-se por IP, sendo insuficiente contra brute force distribuído via múltiplos IPs ou credential stuffing.
