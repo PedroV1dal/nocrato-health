@@ -52,7 +52,7 @@ export class DoctorAuthController {
   // US-1.6: Resolver email antes do login (retorna slug ou hasPendingInvite) — SEC-08
   @Get('resolve-email/:email')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Resolver email antes do login — retorna slug do portal ou flag de convite pendente' })
   @ApiParam({ name: 'email', description: 'Email do doutor', example: 'dr@clinica.com' })
   @ApiResponse({ status: 200, description: 'Retorna { slug } ou { hasPendingInvite: true }' })
@@ -124,8 +124,10 @@ export class DoctorAuthController {
     return this.doctorAuthService.resetPassword(dto.token, dto.newPassword)
   }
 
-  // US-1.8: Renovar par de tokens
+  // US-1.8: Renovar par de tokens — SEC-18
   @Post('refresh')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Renovar par de tokens do doutor usando refreshToken' })
   @ApiBody({
     schema: {

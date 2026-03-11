@@ -76,8 +76,10 @@ export class AgencyAuthController {
     return this.agencyAuthService.resetPassword(dto.token, dto.newPassword)
   }
 
-  // US-1.8: Renovar par de tokens
+  // US-1.8: Renovar par de tokens — SEC-18
   @Post('refresh')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Renovar par de tokens usando refreshToken' })
   @ApiBody({
     schema: {

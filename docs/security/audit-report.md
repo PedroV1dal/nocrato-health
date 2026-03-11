@@ -178,7 +178,7 @@ O risco mais urgente é a ausência de `Content-Security-Policy` no Nginx (SEC-0
 #### SEC-08 — Endpoint público `/doctor/auth/resolve-email/:email` enumera emails e dados de clínicas ✅ RESOLVIDO (parcial)
 
 - **Severidade:** MEDIUM
-- **Fix aplicado:** `doctor-auth.controller.ts` — `@UseGuards(ThrottlerGuard) @Throttle({ default: { limit: 10, ttl: 60000 } })` no método `resolveEmail()`. Rate limit de 10 req/min por IP implementado.
+- **Fix aplicado:** `doctor-auth.controller.ts` — `@UseGuards(ThrottlerGuard) @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })` no método `resolveEmail()`. Rate limit de 5 req/15min por IP implementado — alinhado com demais endpoints de auth (OBS-TL-1 resolvida).
 - **Pendente:** normalização da resposta (retornar erro genérico sem distinguir "não existe" de "convite pendente") — requer mudança no service e impacta UX do fluxo de login do doutor; aceito como trade-off MVP.
 - **Módulo:** `apps/api/src/modules/auth/doctor-auth.controller.ts:51-58`
 - **Evidência:**
@@ -326,11 +326,12 @@ O risco mais urgente é a ausência de `Content-Security-Policy` no Nginx (SEC-0
 
 ---
 
-#### SEC-18 — Endpoints `/auth/refresh` sem rate limiting específico
+#### SEC-18 — Endpoints `/auth/refresh` sem rate limiting específico ✅ RESOLVIDO
 
 - **Severidade:** MEDIUM
+- **Fix:** `agency-auth.controller.ts` e `doctor-auth.controller.ts` — adicionados `@UseGuards(ThrottlerGuard)` e `@Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })` nos métodos `refresh()` de ambos os controllers. Limite: 5 req/15min por IP — consistente com login/forgot/reset.
 - **Módulo:** `apps/api/src/modules/auth/agency-auth.controller.ts:80-95`; `apps/api/src/modules/auth/doctor-auth.controller.ts:127-143`
-- **Descrição:** Os endpoints `POST /agency/auth/refresh` e `POST /doctor/auth/refresh` não têm `@UseGuards(ThrottlerGuard)` nem `@Throttle`. O SEC-09 cobriu login/forgot/reset, mas os endpoints de refresh ficaram sem proteção específica.
+- **Descrição:** Os endpoints `POST /agency/auth/refresh` e `POST /doctor/auth/refresh` não tinham `@UseGuards(ThrottlerGuard)` nem `@Throttle`. O SEC-09 cobriu login/forgot/reset, mas os endpoints de refresh ficaram sem proteção específica.
 - **Impacto:** Ataque automatizado de token stuffing com refresh tokens roubados. Embora a rotação de versão (SEC-07) invalide tokens após uso, a ausência de rate limiting facilita exploração antes da invalidação.
 - **Recomendação:** Adicionar `@UseGuards(ThrottlerGuard)` e `@Throttle({ default: { limit: 10, ttl: 60000 } })` em ambos os endpoints de refresh.
 
@@ -384,7 +385,7 @@ O risco mais urgente é a ausência de `Content-Security-Policy` no Nginx (SEC-0
 | ---------- | ----- | ------------------------------------------------------------------------------------------------ |
 | CRITICAL   | 0     | —                                                                                                |
 | HIGH       | 6     | SEC-01 ✅, SEC-02 ✅, SEC-03 ✅, SEC-14 ✅, SEC-15 ✅, SEC-16 ✅                                |
-| MEDIUM     | 8     | SEC-04 ✅, SEC-05 ✅, SEC-06 ✅, SEC-07 ✅, SEC-08 ✅, SEC-09 ✅, SEC-17 ✅, SEC-18             |
+| MEDIUM     | 8     | SEC-04 ✅, SEC-05 ✅, SEC-06 ✅, SEC-07 ✅, SEC-08 ✅, SEC-09 ✅, SEC-17 ✅, SEC-18 ✅         |
 | LOW        | 8     | SEC-10, SEC-11, SEC-12, SEC-13, SEC-19, SEC-20, SEC-21, SEC-22                                   |
 
 ---
