@@ -8,6 +8,7 @@ export interface JwtPayload {
   type: 'agency' | 'doctor'
   role: 'agency_admin' | 'agency_member' | 'doctor'
   tenantId?: string
+  refreshTokenVersion?: number
 }
 
 @Injectable()

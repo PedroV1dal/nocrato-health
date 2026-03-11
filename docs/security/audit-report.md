@@ -155,22 +155,10 @@ O risco mais urgente é a ausência de `Content-Security-Policy` no Nginx (SEC-0
 
 ---
 
-#### SEC-07 — Refresh token sem blacklist: tokens roubados permanecem válidos até expirar (7d)
+#### SEC-07 — Refresh token sem blacklist: tokens roubados permanecem válidos até expirar (7d) ✅ RESOLVIDO
 - **Severidade:** MEDIUM
-- **Módulo:** `apps/api/src/modules/auth/agency-auth.service.ts:163-192`; `apps/api/src/modules/auth/doctor-auth.service.ts:341-371`
-- **Evidência:**
-  ```typescript
-  async refreshToken(token: string) {
-    payload = this.jwtService.verify(token, { secret: env.JWT_REFRESH_SECRET })
-    // Emite novos tokens SEM invalidar o anterior
-    const accessToken = this.jwtService.sign(newPayload, ...)
-    const refreshToken = this.jwtService.sign(newPayload, ...)
-    return { accessToken, refreshToken }
-  }
-  ```
-- **Descrição:** O sistema emite um novo par de tokens no refresh sem invalidar o refresh token anterior. Um atacante com um refresh token roubado (via XSS, MITM, ou insider) pode continuar gerando access tokens pelos 7 dias completos de validade, mesmo após o usuário legítimo renovar o par.
-- **Impacto:** Sessão paralela invisível e não detectável. Em plataforma com dados de saúde LGPD, acesso não detectado por 7 dias representa risco crítico de privacidade e compliance.
-- **Recomendação:** Implementar refresh token rotation: adicionar coluna `refresh_token_version` (integer) nas tabelas `agency_members` e `doctors`. O JWT carrega a versão como claim; ao fazer refresh, verificar que a versão bate com o banco e incrementar. Token com versão antiga é rejeitado automaticamente.
+- **Fix aplicado:** Migration `017_add_refresh_token_version_to_users` adicionou `refresh_token_version INTEGER NOT NULL DEFAULT 0` em `agency_members` e `doctors`. `JwtPayload` estendido com `refreshTokenVersion?: number`. `loginAgency`, `loginDoctor` e `acceptDoctorInvite` embute a versão do banco no refresh token. `refreshToken` (ambos os services) valida que `payload.refreshTokenVersion === DB.refresh_token_version` antes de renovar — versão divergente lança `UnauthorizedException('Refresh token revogado')`. Incremento atômico via `knex.raw('refresh_token_version + 1')`. Access token não carrega a claim.
+- **Resultado:** Janela de exposição reduzida de 7 dias para a duração de uma única sessão. Token roubado é invalidado automaticamente no próximo refresh legítimo.
 
 ---
 

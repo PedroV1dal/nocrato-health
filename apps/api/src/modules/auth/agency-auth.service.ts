@@ -14,6 +14,7 @@ interface AgencyMemberRow {
   name: string
   role: 'agency_admin' | 'agency_member'
   status: 'pending' | 'active' | 'inactive'
+  refresh_token_version: number
   last_login_at: Date | null
   created_at: Date
   updated_at: Date
@@ -53,18 +54,23 @@ export class AgencyAuthService {
       throw new UnauthorizedException('Credenciais inválidas')
     }
 
-    const payload = {
+    const accessPayload = {
       sub: member.id,
       type: 'agency' as const,
       role: member.role,
     }
 
-    const accessToken = this.jwtService.sign(payload, {
+    const refreshPayload = {
+      ...accessPayload,
+      refreshTokenVersion: member.refresh_token_version,
+    }
+
+    const accessToken = this.jwtService.sign(accessPayload, {
       secret: env.JWT_SECRET,
       expiresIn: env.JWT_EXPIRES_IN,
     })
 
-    const refreshToken = this.jwtService.sign(payload, {
+    const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: env.JWT_REFRESH_SECRET,
       expiresIn: env.JWT_REFRESH_EXPIRES_IN,
     })
@@ -159,9 +165,9 @@ export class AgencyAuthService {
     return { message: 'Senha redefinida com sucesso' }
   }
 
-  // US-1.8: Renovar par de tokens (agency)
+  // US-1.8: Renovar par de tokens (agency) com rotation de versão (SEC-07)
   async refreshToken(token: string) {
-    let payload: { sub: string; type: string; role: string }
+    let payload: { sub: string; type: string; role: string; refreshTokenVersion?: number }
     try {
       payload = this.jwtService.verify(token, { secret: env.JWT_REFRESH_SECRET })
     } catch {
@@ -172,18 +178,42 @@ export class AgencyAuthService {
       throw new UnauthorizedException('Refresh token inválido ou expirado')
     }
 
-    const newPayload = {
+    const member = await this.knex<AgencyMemberRow>('agency_members')
+      .where({ id: payload.sub })
+      .first()
+
+    if (!member) {
+      throw new UnauthorizedException('Refresh token inválido ou expirado')
+    }
+
+    if (payload.refreshTokenVersion !== member.refresh_token_version) {
+      throw new UnauthorizedException('Refresh token revogado')
+    }
+
+    await this.knex('agency_members').where({ id: payload.sub }).update({
+      refresh_token_version: this.knex.raw('refresh_token_version + 1'),
+      updated_at: this.knex.fn.now(),
+    })
+
+    const newVersion = member.refresh_token_version + 1
+
+    const accessPayload = {
       sub: payload.sub,
       type: 'agency' as const,
       role: payload.role as 'agency_admin' | 'agency_member',
     }
 
-    const accessToken = this.jwtService.sign(newPayload, {
+    const refreshPayload = {
+      ...accessPayload,
+      refreshTokenVersion: newVersion,
+    }
+
+    const accessToken = this.jwtService.sign(accessPayload, {
       secret: env.JWT_SECRET,
       expiresIn: env.JWT_EXPIRES_IN,
     })
 
-    const refreshToken = this.jwtService.sign(newPayload, {
+    const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: env.JWT_REFRESH_SECRET,
       expiresIn: env.JWT_REFRESH_EXPIRES_IN,
     })

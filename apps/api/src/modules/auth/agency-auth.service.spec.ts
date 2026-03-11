@@ -895,15 +895,44 @@ describe('AgencyAuthService — loginAgency', () => {
 // =============================================================================
 
 describe('AgencyAuthService — US-1.8 — refreshToken', () => {
+  const MEMBER_WITH_VERSION = {
+    ...ACTIVE_MEMBER,
+    refresh_token_version: 3,
+  }
+
   const AGENCY_REFRESH_PAYLOAD = {
     sub: ACTIVE_MEMBER.id,
     type: 'agency',
     role: 'agency_admin',
+    refreshTokenVersion: MEMBER_WITH_VERSION.refresh_token_version,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
   }
 
-  async function createRefreshModule(verifyImpl: () => unknown) {
+  function buildRefreshKnex(memberRow: unknown) {
+    const selectBuilder = buildBuilder(memberRow)
+    const updateBuilder = buildBuilder(undefined)
+
+    const mockKnexFn = jest.fn() as KnexFnMock & { raw: jest.Mock }
+    mockKnexFn.fn = { now: jest.fn().mockReturnValue('NOW()') }
+    ;(mockKnexFn as jest.Mock & { raw: jest.Mock }).raw = jest.fn().mockReturnValue('refresh_token_version + 1')
+
+    let callCount = 0
+    ;(mockKnexFn as jest.Mock).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return selectBuilder  // knex('agency_members').where({ id }).first()
+      return updateBuilder                        // knex('agency_members').where({ id }).update(...)
+    })
+
+    return { mockKnexFn: mockKnexFn as unknown as jest.Mock, selectBuilder, updateBuilder }
+  }
+
+  async function createRefreshModule(
+    verifyImpl: () => unknown,
+    memberRow: unknown = MEMBER_WITH_VERSION,
+  ) {
+    const { mockKnexFn } = buildRefreshKnex(memberRow)
+
     const mockJwtService = {
       verify: jest.fn().mockImplementation(verifyImpl),
       sign: jest.fn()
@@ -914,7 +943,7 @@ describe('AgencyAuthService — US-1.8 — refreshToken', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AgencyAuthService,
-        { provide: KNEX, useValue: jest.fn() },
+        { provide: KNEX, useValue: mockKnexFn },
         { provide: JwtService, useValue: mockJwtService },
         { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
       ],
@@ -944,6 +973,7 @@ describe('AgencyAuthService — US-1.8 — refreshToken', () => {
 
     it('re-emite com JWT_SECRET para access e JWT_REFRESH_SECRET para refresh', async () => {
       const signCalls: Array<{ secret: string; expiresIn: string }> = []
+      const { mockKnexFn } = buildRefreshKnex(MEMBER_WITH_VERSION)
 
       const mockJwtService = {
         verify: jest.fn().mockReturnValue(AGENCY_REFRESH_PAYLOAD),
@@ -956,7 +986,7 @@ describe('AgencyAuthService — US-1.8 — refreshToken', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           AgencyAuthService,
-          { provide: KNEX, useValue: jest.fn() },
+          { provide: KNEX, useValue: mockKnexFn },
           { provide: JwtService, useValue: mockJwtService },
           { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
         ],
@@ -973,6 +1003,7 @@ describe('AgencyAuthService — US-1.8 — refreshToken', () => {
 
     it('payload do re-emit contém { sub, type: "agency", role } sem tenantId', async () => {
       const signPayloads: Array<Record<string, unknown>> = []
+      const { mockKnexFn } = buildRefreshKnex(MEMBER_WITH_VERSION)
 
       const mockJwtService = {
         verify: jest.fn().mockReturnValue(AGENCY_REFRESH_PAYLOAD),
@@ -985,7 +1016,7 @@ describe('AgencyAuthService — US-1.8 — refreshToken', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           AgencyAuthService,
-          { provide: KNEX, useValue: jest.fn() },
+          { provide: KNEX, useValue: mockKnexFn },
           { provide: JwtService, useValue: mockJwtService },
           { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
         ],
@@ -1001,6 +1032,69 @@ describe('AgencyAuthService — US-1.8 — refreshToken', () => {
         expect(payload).not.toHaveProperty('tenantId')
       }
     })
+
+    // SEC-07: rotation — versão zero (primeiro refresh após login)
+    it('SEC-07: aceita refreshTokenVersion: 0 (primeiro uso após login)', async () => {
+      const memberV0 = { ...ACTIVE_MEMBER, refresh_token_version: 0 }
+      const payloadV0 = { ...AGENCY_REFRESH_PAYLOAD, refreshTokenVersion: 0 }
+
+      const { service } = await createRefreshModule(() => payloadV0, memberV0)
+
+      const result = await service.refreshToken('valid-refresh-token')
+      expect(result).toHaveProperty('accessToken')
+      expect(result).toHaveProperty('refreshToken')
+    })
+
+    // SEC-07: o novo refresh payload deve conter refreshTokenVersion incrementado
+    it('SEC-07: novo refresh token carrega refreshTokenVersion incrementado', async () => {
+      const signPayloads: Array<Record<string, unknown>> = []
+      const { mockKnexFn } = buildRefreshKnex(MEMBER_WITH_VERSION)
+
+      const mockJwtService = {
+        verify: jest.fn().mockReturnValue(AGENCY_REFRESH_PAYLOAD),
+        sign: jest.fn().mockImplementation((payload) => {
+          signPayloads.push({ ...payload })
+          return 'some-token'
+        }),
+      }
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          AgencyAuthService,
+          { provide: KNEX, useValue: mockKnexFn },
+          { provide: JwtService, useValue: mockJwtService },
+          { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
+        ],
+      }).compile()
+
+      const service = module.get<AgencyAuthService>(AgencyAuthService)
+      await service.refreshToken('valid-refresh-token')
+
+      // access token payload NÃO carrega refreshTokenVersion
+      expect(signPayloads[0]).not.toHaveProperty('refreshTokenVersion')
+      // refresh token payload carrega versão incrementada (version + 1)
+      expect(signPayloads[1].refreshTokenVersion).toBe(MEMBER_WITH_VERSION.refresh_token_version + 1)
+    })
+  })
+
+  describe('SEC-07: rotation — versão divergente (token reutilizado ou revogado)', () => {
+    it('lança UnauthorizedException("Refresh token revogado") quando versão do payload diverge do banco', async () => {
+      const payloadVersaoAntiga = { ...AGENCY_REFRESH_PAYLOAD, refreshTokenVersion: 1 }
+      // banco já está em version 3 (MEMBER_WITH_VERSION)
+      const { service } = await createRefreshModule(() => payloadVersaoAntiga)
+
+      await expect(service.refreshToken('reused-refresh-token')).rejects.toThrow(
+        new UnauthorizedException('Refresh token revogado'),
+      )
+    })
+
+    it('lança UnauthorizedException quando membro não é encontrado no banco (sub inválido)', async () => {
+      const { service } = await createRefreshModule(() => AGENCY_REFRESH_PAYLOAD, null)
+
+      await expect(service.refreshToken('valid-token-deleted-member')).rejects.toThrow(
+        new UnauthorizedException('Refresh token inválido ou expirado'),
+      )
+    })
   })
 
   describe('Erro: token inválido ou expirado', () => {
@@ -1012,6 +1106,40 @@ describe('AgencyAuthService — US-1.8 — refreshToken', () => {
       await expect(service.refreshToken('expired-token')).rejects.toThrow(
         new UnauthorizedException('Refresh token inválido ou expirado'),
       )
+    })
+  })
+
+  describe('SEC-07: loginAgency embute refreshTokenVersion no refresh payload', () => {
+    it('login retorna refresh token com refreshTokenVersion do membro', async () => {
+      const memberV5 = { ...ACTIVE_MEMBER, refresh_token_version: 5 }
+      const signPayloads: Array<Record<string, unknown>> = []
+
+      const mockJwtService = {
+        sign: jest.fn().mockImplementation((payload) => {
+          signPayloads.push({ ...payload })
+          return 'token-stub'
+        }),
+      }
+
+      const { mockKnexFn: loginKnex } = buildMockKnex(memberV5)
+      const bcryptHash = bcrypt.compare as jest.Mock
+      bcryptHash.mockResolvedValue(true)
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          AgencyAuthService,
+          { provide: KNEX, useValue: loginKnex },
+          { provide: JwtService, useValue: mockJwtService },
+          { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
+        ],
+      }).compile()
+
+      const service = module.get<AgencyAuthService>(AgencyAuthService)
+      await service.loginAgency('admin@nocrato.com', 'senha-correta')
+
+      // signPayloads[0] = access payload, signPayloads[1] = refresh payload
+      expect(signPayloads[1].refreshTokenVersion).toBe(5)
+      expect(signPayloads[0]).not.toHaveProperty('refreshTokenVersion')
     })
   })
 

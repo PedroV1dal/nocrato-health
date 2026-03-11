@@ -28,7 +28,10 @@ CREATE TABLE agency_members (
     -- V2 will introduce granular RBAC; this column may become a FK to a roles table.
     status          VARCHAR(50)  NOT NULL DEFAULT 'pending',
     -- 'pending' (invited, not yet logged in) | 'active' | 'inactive'
-    last_login_at   TIMESTAMPTZ,
+    last_login_at           TIMESTAMPTZ,
+    refresh_token_version   INTEGER      NOT NULL DEFAULT 0,
+    -- Incremented on every refresh token rotation (SEC-07).
+    -- Stored in the JWT claim; rejected if less than the current version.
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
 
@@ -182,6 +185,9 @@ CREATE TABLE doctors (
     status                  VARCHAR(50)  NOT NULL DEFAULT 'active',
     -- 'active' | 'inactive'
     last_login_at           TIMESTAMPTZ,
+    refresh_token_version   INTEGER      NOT NULL DEFAULT 0,
+    -- Incremented on every refresh token rotation (SEC-07).
+    -- Stored in the JWT claim; rejected if less than the current version.
     created_at              TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ  NOT NULL DEFAULT now(),
 

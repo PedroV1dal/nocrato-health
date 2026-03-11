@@ -1218,16 +1218,45 @@ describe('DoctorAuthService', () => {
   // =========================================================================
 
   describe('US-1.8 — refreshToken', () => {
+    const DOCTOR_WITH_VERSION = {
+      ...ACTIVE_DOCTOR,
+      refresh_token_version: 2,
+    }
+
     const DOCTOR_REFRESH_PAYLOAD = {
       sub: ACTIVE_DOCTOR.id,
       type: 'doctor',
       role: 'doctor',
       tenantId: CREATED_TENANT.id,
+      refreshTokenVersion: DOCTOR_WITH_VERSION.refresh_token_version,
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
     }
 
-    async function createRefreshModule(verifyImpl: () => unknown) {
+    function buildDoctorRefreshKnex(doctorRow: unknown) {
+      const selectBuilder = buildBuilder(doctorRow)
+      const updateBuilder = buildBuilder(undefined)
+
+      const mockKnexFn = jest.fn() as KnexFnMock & { raw: jest.Mock }
+      mockKnexFn.fn = { now: jest.fn().mockReturnValue('NOW()') }
+      ;(mockKnexFn as jest.Mock & { raw: jest.Mock }).raw = jest.fn().mockReturnValue('refresh_token_version + 1')
+
+      let callCount = 0
+      ;(mockKnexFn as jest.Mock).mockImplementation(() => {
+        callCount++
+        if (callCount === 1) return selectBuilder  // knex('doctors').where({ id }).first()
+        return updateBuilder                        // knex('doctors').where({ id }).update(...)
+      })
+
+      return { mockKnexFn: mockKnexFn as unknown as jest.Mock, selectBuilder, updateBuilder }
+    }
+
+    async function createRefreshModule(
+      verifyImpl: () => unknown,
+      doctorRow: unknown = DOCTOR_WITH_VERSION,
+    ) {
+      const { mockKnexFn } = buildDoctorRefreshKnex(doctorRow)
+
       const mockJwtService = {
         verify: jest.fn().mockImplementation(verifyImpl),
         sign: jest.fn()
@@ -1238,7 +1267,7 @@ describe('DoctorAuthService', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           DoctorAuthService,
-          { provide: KNEX, useValue: jest.fn() },
+          { provide: KNEX, useValue: mockKnexFn },
           { provide: JwtService, useValue: mockJwtService },
           { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
         ],
@@ -1251,7 +1280,7 @@ describe('DoctorAuthService', () => {
     }
 
     describe('Happy path', () => {
-      it('should return { accessToken, refreshToken } on valid token', async () => {
+      it('deve retornar { accessToken, refreshToken } com token válido', async () => {
         const { service } = await createRefreshModule(() => DOCTOR_REFRESH_PAYLOAD)
 
         const result = await service.refreshToken('valid-refresh-token')
@@ -1262,8 +1291,9 @@ describe('DoctorAuthService', () => {
         })
       })
 
-      it('should preserve tenantId in re-emitted payload', async () => {
+      it('deve preservar tenantId no payload re-emitido', async () => {
         const signPayloads: Array<Record<string, unknown>> = []
+        const { mockKnexFn } = buildDoctorRefreshKnex(DOCTOR_WITH_VERSION)
 
         const mockJwtService = {
           verify: jest.fn().mockReturnValue(DOCTOR_REFRESH_PAYLOAD),
@@ -1276,7 +1306,7 @@ describe('DoctorAuthService', () => {
         const module: TestingModule = await Test.createTestingModule({
           providers: [
             DoctorAuthService,
-            { provide: KNEX, useValue: jest.fn() },
+            { provide: KNEX, useValue: mockKnexFn },
             { provide: JwtService, useValue: mockJwtService },
             { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
           ],
@@ -1293,8 +1323,9 @@ describe('DoctorAuthService', () => {
         }
       })
 
-      it('should re-emit with JWT_SECRET for access and JWT_REFRESH_SECRET for refresh', async () => {
+      it('deve re-emitir com JWT_SECRET para access e JWT_REFRESH_SECRET para refresh', async () => {
         const signCalls: Array<{ secret: string; expiresIn: string }> = []
+        const { mockKnexFn } = buildDoctorRefreshKnex(DOCTOR_WITH_VERSION)
 
         const mockJwtService = {
           verify: jest.fn().mockReturnValue(DOCTOR_REFRESH_PAYLOAD),
@@ -1307,7 +1338,7 @@ describe('DoctorAuthService', () => {
         const module: TestingModule = await Test.createTestingModule({
           providers: [
             DoctorAuthService,
-            { provide: KNEX, useValue: jest.fn() },
+            { provide: KNEX, useValue: mockKnexFn },
             { provide: JwtService, useValue: mockJwtService },
             { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
           ],
@@ -1321,10 +1352,150 @@ describe('DoctorAuthService', () => {
         expect(signCalls[1].secret).toBe('test-refresh-secret-at-least-16')
         expect(signCalls[1].expiresIn).toBe('7d')
       })
+
+      // SEC-07: rotation — versão zero (primeiro refresh após acceptDoctorInvite)
+      it('SEC-07: deve aceitar refreshTokenVersion: 0 (primeiro uso após acceptDoctorInvite)', async () => {
+        const doctorV0 = { ...ACTIVE_DOCTOR, refresh_token_version: 0 }
+        const payloadV0 = { ...DOCTOR_REFRESH_PAYLOAD, refreshTokenVersion: 0 }
+
+        const { service } = await createRefreshModule(() => payloadV0, doctorV0)
+
+        const result = await service.refreshToken('valid-refresh-token')
+        expect(result).toHaveProperty('accessToken')
+        expect(result).toHaveProperty('refreshToken')
+      })
+
+      // SEC-07: refresh payload carrega versão incrementada
+      it('SEC-07: novo refresh token carrega refreshTokenVersion incrementado', async () => {
+        const signPayloads: Array<Record<string, unknown>> = []
+        const { mockKnexFn } = buildDoctorRefreshKnex(DOCTOR_WITH_VERSION)
+
+        const mockJwtService = {
+          verify: jest.fn().mockReturnValue(DOCTOR_REFRESH_PAYLOAD),
+          sign: jest.fn().mockImplementation((payload) => {
+            signPayloads.push({ ...payload })
+            return 'some-token'
+          }),
+        }
+
+        const module: TestingModule = await Test.createTestingModule({
+          providers: [
+            DoctorAuthService,
+            { provide: KNEX, useValue: mockKnexFn },
+            { provide: JwtService, useValue: mockJwtService },
+            { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
+          ],
+        }).compile()
+
+        const service = module.get<DoctorAuthService>(DoctorAuthService)
+        await service.refreshToken('valid-refresh-token')
+
+        // access token payload NÃO carrega refreshTokenVersion
+        expect(signPayloads[0]).not.toHaveProperty('refreshTokenVersion')
+        // refresh token payload carrega versão incrementada (version + 1)
+        expect(signPayloads[1].refreshTokenVersion).toBe(DOCTOR_WITH_VERSION.refresh_token_version + 1)
+      })
+    })
+
+    describe('SEC-07: rotation — versão divergente (token reutilizado ou revogado)', () => {
+      it('deve lançar UnauthorizedException("Refresh token revogado") quando versão do payload diverge do banco', async () => {
+        const payloadVersaoAntiga = { ...DOCTOR_REFRESH_PAYLOAD, refreshTokenVersion: 0 }
+        // banco já está em version 2 (DOCTOR_WITH_VERSION)
+        const { service } = await createRefreshModule(() => payloadVersaoAntiga)
+
+        await expect(service.refreshToken('reused-refresh-token')).rejects.toThrow(
+          new UnauthorizedException('Refresh token revogado'),
+        )
+      })
+
+      it('deve lançar UnauthorizedException quando doutor não é encontrado no banco (sub inválido)', async () => {
+        const { service } = await createRefreshModule(() => DOCTOR_REFRESH_PAYLOAD, null)
+
+        await expect(service.refreshToken('valid-token-deleted-doctor')).rejects.toThrow(
+          new UnauthorizedException('Refresh token inválido ou expirado'),
+        )
+      })
+    })
+
+    describe('SEC-07: loginDoctor embute refreshTokenVersion no refresh payload', () => {
+      it('deve retornar refresh token com refreshTokenVersion do doutor após login', async () => {
+        const doctorV4 = { ...ACTIVE_DOCTOR, refresh_token_version: 4 }
+        const signPayloads: Array<Record<string, unknown>> = []
+
+        const mockJwtService = {
+          sign: jest.fn().mockImplementation((payload) => {
+            signPayloads.push({ ...payload })
+            return 'token-stub'
+          }),
+        }
+
+        const bcryptCompare = bcrypt.compare as jest.Mock
+        bcryptCompare.mockResolvedValue(true)
+
+        // loginDoctor faz: knex('doctors').where().first() → knex('tenants').where().first() → knex('doctors').where().update()
+        const doctorBuilder = buildBuilder(doctorV4)
+        const tenantBuilder = buildBuilder(CREATED_TENANT)
+        const updateBuilder = buildBuilder(undefined)
+
+        const loginKnex = buildKnexFn(doctorBuilder, tenantBuilder, updateBuilder) as KnexFnMock & { fn: { now: jest.Mock } }
+
+        const module: TestingModule = await Test.createTestingModule({
+          providers: [
+            DoctorAuthService,
+            { provide: KNEX, useValue: loginKnex },
+            { provide: JwtService, useValue: mockJwtService },
+            { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
+          ],
+        }).compile()
+
+        const service = module.get<DoctorAuthService>(DoctorAuthService)
+        await service.loginDoctor(DOCTOR_EMAIL, DOCTOR_PASSWORD)
+
+        // signPayloads[0] = access payload, signPayloads[1] = refresh payload
+        expect(signPayloads[1].refreshTokenVersion).toBe(4)
+        expect(signPayloads[0]).not.toHaveProperty('refreshTokenVersion')
+      })
+    })
+
+    describe('SEC-07: acceptDoctorInvite embute refreshTokenVersion: 0 no refresh payload', () => {
+      it('deve retornar refresh token com refreshTokenVersion: 0 após aceitar convite', async () => {
+        const signPayloads: Array<Record<string, unknown>> = []
+
+        const mockJwtService = {
+          sign: jest.fn().mockImplementation((payload) => {
+            signPayloads.push({ ...payload })
+            return 'token-stub'
+          }),
+        }
+
+        const bcryptHash = bcrypt.hash as jest.Mock
+        bcryptHash.mockResolvedValue(PASSWORD_HASH)
+
+        const trxFn = buildTransactionMock({})
+        const inviteBuilder = buildBuilder(PENDING_INVITE)
+        const mockKnexFn = buildKnexFn(inviteBuilder) as KnexFnMock & { transaction: jest.Mock }
+        mockKnexFn.transaction = jest.fn().mockImplementation(async (cb) => cb(trxFn))
+
+        const module: TestingModule = await Test.createTestingModule({
+          providers: [
+            DoctorAuthService,
+            { provide: KNEX, useValue: mockKnexFn },
+            { provide: JwtService, useValue: mockJwtService },
+            { provide: EmailService, useValue: { sendPasswordReset: jest.fn() } },
+          ],
+        }).compile()
+
+        const service = module.get<DoctorAuthService>(DoctorAuthService)
+        await service.acceptDoctorInvite(VALID_TOKEN, DOCTOR_NAME, DOCTOR_PASSWORD, DOCTOR_SLUG)
+
+        // signPayloads[0] = access payload, signPayloads[1] = refresh payload
+        expect(signPayloads[1].refreshTokenVersion).toBe(0)
+        expect(signPayloads[0]).not.toHaveProperty('refreshTokenVersion')
+      })
     })
 
     describe('Erro: token inválido ou expirado', () => {
-      it('should throw UnauthorizedException when jwtService.verify throws', async () => {
+      it('deve lançar UnauthorizedException quando jwtService.verify lança erro', async () => {
         const { service } = await createRefreshModule(() => {
           throw new Error('jwt expired')
         })
@@ -1336,7 +1507,7 @@ describe('DoctorAuthService', () => {
     })
 
     describe('Segurança: cross-domain', () => {
-      it('should throw UnauthorizedException when type is "agency" (agency token on doctor endpoint)', async () => {
+      it('deve lançar UnauthorizedException quando type é "agency" (token de agency no endpoint de doutor)', async () => {
         const agencyPayload = { ...DOCTOR_REFRESH_PAYLOAD, type: 'agency' }
         const { service } = await createRefreshModule(() => agencyPayload)
 

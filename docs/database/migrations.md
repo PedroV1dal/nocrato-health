@@ -2,7 +2,7 @@
 
 ## Migration Order
 
-The schema is split into 16 sequential migration files. The ordering strictly respects foreign key dependencies: each migration only references tables created in earlier migrations.
+The schema is split into 17 sequential migration files. The ordering strictly respects foreign key dependencies: each migration only references tables created in earlier migrations.
 
 | # | Migration File | Table/Object Created | FK Dependencies |
 |---|---------------|---------------------|-----------------|
@@ -22,6 +22,7 @@ The schema is split into 16 sequential migration files. The ordering strictly re
 | 014 | `014_add_booking_mode_to_agent_settings.sql` | `agent_settings.booking_mode` column | `agent_settings` |
 | 015 | `015_alter_doctors_nullable_crm.ts` | `doctors.crm`, `doctors.crm_state` → nullable; `doctors.working_hours` DEFAULT `'{}'` → `NULL` (BUG-01 + BUG-02) | `doctors` |
 | 016 | `016_add_evolution_instance_to_agent_settings.ts` | `agent_settings.evolution_instance_name VARCHAR(100) NULL` + index parcial (TD-20) | `agent_settings` |
+| 017 | `017_add_refresh_token_version_to_users.ts` | `agency_members.refresh_token_version INTEGER NOT NULL DEFAULT 0`, `doctors.refresh_token_version INTEGER NOT NULL DEFAULT 0` (SEC-07) | `agency_members`, `doctors` |
 
 ---
 
@@ -63,6 +64,8 @@ The dependency ordering can be visualized as a directed acyclic graph (DAG). An 
  +---> 015 alter doctors (crm/crm_state → nullable; working_hours DEFAULT → NULL)
  |
  +---> 016 alter agent_settings (add evolution_instance_name column)
+ |
+ +---> 017 alter agency_members + doctors (add refresh_token_version column)
 ```
 
 ### Critical Ordering Constraints
@@ -207,7 +210,7 @@ Migration 012 (triggers) additionally contains:
 
 ---
 
-## Seed Data (Migration 017 or separate seed script)
+## Seed Data (separate seed script)
 
 The initial seed creates the first agency admin, bypassing the invite flow:
 

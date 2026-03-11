@@ -41,6 +41,7 @@ interface DoctorRow {
   password_hash?: string
   status?: string
   onboarding_completed?: boolean
+  refresh_token_version: number
   last_login_at?: unknown
   crm: string | null        // nullable após migration 015
   crm_state: string | null  // nullable após migration 015
@@ -111,19 +112,24 @@ export class DoctorAuthService {
       throw new NotFoundException('Portal do doutor não encontrado')
     }
 
-    const payload = {
+    const accessPayload = {
       sub: doctor.id,
       type: 'doctor' as const,
       role: 'doctor' as const,
       tenantId: doctor.tenant_id,
     }
 
-    const accessToken = this.jwtService.sign(payload, {
+    const refreshPayload = {
+      ...accessPayload,
+      refreshTokenVersion: doctor.refresh_token_version,
+    }
+
+    const accessToken = this.jwtService.sign(accessPayload, {
       secret: env.JWT_SECRET,
       expiresIn: env.JWT_EXPIRES_IN,
     })
 
-    const refreshToken = this.jwtService.sign(payload, {
+    const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: env.JWT_REFRESH_SECRET,
       expiresIn: env.JWT_REFRESH_EXPIRES_IN,
     })
@@ -262,19 +268,24 @@ export class DoctorAuthService {
     })
 
     // 4. Emitir JWT (access + refresh) após commit da transação
-    const payload = {
+    const accessPayload = {
       sub: doctorId!,
       type: 'doctor' as const,
       role: 'doctor' as const,
       tenantId: tenantId!,
     }
 
-    const accessToken = this.jwtService.sign(payload, {
+    const refreshPayload = {
+      ...accessPayload,
+      refreshTokenVersion: 0,
+    }
+
+    const accessToken = this.jwtService.sign(accessPayload, {
       secret: env.JWT_SECRET,
       expiresIn: env.JWT_EXPIRES_IN,
     })
 
-    const refreshToken = this.jwtService.sign(payload, {
+    const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: env.JWT_REFRESH_SECRET,
       expiresIn: env.JWT_REFRESH_EXPIRES_IN,
     })
@@ -337,9 +348,9 @@ export class DoctorAuthService {
     return { message: 'Se este e-mail estiver cadastrado, você receberá as instruções em breve.' }
   }
 
-  // US-1.8: Renovar par de tokens (doctor)
+  // US-1.8: Renovar par de tokens (doctor) com rotation de versão (SEC-07)
   async refreshToken(token: string) {
-    let payload: { sub: string; type: string; role: string; tenantId: string }
+    let payload: { sub: string; type: string; role: string; tenantId: string; refreshTokenVersion?: number }
     try {
       payload = this.jwtService.verify(token, { secret: env.JWT_REFRESH_SECRET })
     } catch {
@@ -350,19 +361,43 @@ export class DoctorAuthService {
       throw new UnauthorizedException('Refresh token inválido ou expirado')
     }
 
-    const newPayload = {
+    const doctor = await this.knex<DoctorRow>('doctors')
+      .where({ id: payload.sub })
+      .first()
+
+    if (!doctor) {
+      throw new UnauthorizedException('Refresh token inválido ou expirado')
+    }
+
+    if (payload.refreshTokenVersion !== doctor.refresh_token_version) {
+      throw new UnauthorizedException('Refresh token revogado')
+    }
+
+    await this.knex('doctors').where({ id: payload.sub }).update({
+      refresh_token_version: this.knex.raw('refresh_token_version + 1'),
+      updated_at: this.knex.fn.now(),
+    })
+
+    const newVersion = doctor.refresh_token_version + 1
+
+    const accessPayload = {
       sub: payload.sub,
       type: 'doctor' as const,
       role: 'doctor' as const,
       tenantId: payload.tenantId,
     }
 
-    const accessToken = this.jwtService.sign(newPayload, {
+    const refreshPayload = {
+      ...accessPayload,
+      refreshTokenVersion: newVersion,
+    }
+
+    const accessToken = this.jwtService.sign(accessPayload, {
       secret: env.JWT_SECRET,
       expiresIn: env.JWT_EXPIRES_IN,
     })
 
-    const refreshToken = this.jwtService.sign(newPayload, {
+    const refreshToken = this.jwtService.sign(refreshPayload, {
       secret: env.JWT_REFRESH_SECRET,
       expiresIn: env.JWT_REFRESH_EXPIRES_IN,
     })
