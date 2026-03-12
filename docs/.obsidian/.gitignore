@@ -1,0 +1,6 @@
+# Arquivos gerados localmente — não commitar
+workspace.json
+workspace-mobile.json
+cache
+plugins/
+.trash/

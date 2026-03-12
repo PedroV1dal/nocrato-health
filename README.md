@@ -237,6 +237,14 @@ Detalhes em [`docs/roadmap/epics-overview.md`](docs/roadmap/epics-overview.md).
 
 ## Documentação
 
+A pasta `docs/` está configurada como um **vault do Obsidian**. Para navegar com uma UI melhor (graph view, backlinks, preview de markdown):
+
+1. Abra o Obsidian
+2. **Open folder as vault** → selecione a pasta `docs/` deste projeto
+3. A configuração compartilhada (cores do graph, live preview) já está pronta
+
+> Sem Obsidian? Os arquivos são markdown padrão — leia direto no GitHub ou no editor.
+
 ```
 docs/
 ├── README.md                        # Índice da documentação

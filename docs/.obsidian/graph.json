@@ -1,0 +1,47 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:roadmap/",
+      "color": { "a": 1, "rgb": 14748965 }
+    },
+    {
+      "query": "path:flows/",
+      "color": { "a": 1, "rgb": 3394815 }
+    },
+    {
+      "query": "path:architecture/",
+      "color": { "a": 1, "rgb": 16744272 }
+    },
+    {
+      "query": "path:database/",
+      "color": { "a": 1, "rgb": 10040166 }
+    },
+    {
+      "query": "path:test-cases/",
+      "color": { "a": 1, "rgb": 16777113 }
+    },
+    {
+      "query": "path:security/",
+      "color": { "a": 1, "rgb": 16724736 }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": false,
+  "centerStrength": 0.518713248970312,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 1,
+  "close": false
+}

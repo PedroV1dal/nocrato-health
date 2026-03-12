@@ -60,3 +60,10 @@ uploads/
 .playwright-mcp/
 apps/web/test-results/
 apps/web/playwright-report/
+
+# Obsidian (arquivos de usuário — configs compartilhadas estão em docs/.obsidian/)
+docs/.obsidian/workspace.json
+docs/.obsidian/workspace-mobile.json
+docs/.obsidian/cache
+docs/.obsidian/.trash/
+docs/.attachments/
