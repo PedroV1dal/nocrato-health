@@ -499,3 +499,14 @@ Os itens a seguir foram verificados e considerados adequados:
 7. **(SEC-09, MEDIUM)** Adicionar `@nestjs/throttler` nos endpoints de login e reset de senha em ambos os controllers de auth.
 
 8. **(SEC-10, LOW)** Remover o `location /uploads/` do `docker/nginx.conf` e passar o serving de arquivos pelo NestJS autenticado — especialmente após SEC-03 ser implementado (UUID como filename).
+
+---
+
+## SEC-19 — Rate limiting ineficaz: `trust proxy` ausente ✅ RESOLVIDO
+
+- **Severidade:** MEDIUM
+- **Fix:** `apps/api/src/main.ts` — adicionado `app.getHttpAdapter().getInstance().set('trust proxy', 1)` antes do `helmet()`. O Express/NestJS agora lê o IP real do cliente a partir do cabeçalho `X-Real-IP` / `X-Forwarded-For` enviado pelo Nginx (que usa `$remote_addr`, não spoofável pelo cliente).
+- **Módulo:** `apps/api/src/main.ts`
+- **Descrição:** Sem `trust proxy: 1`, `req.ip` em produção retornava o IP interno do container Nginx (`172.x.x.x`), não o IP real do cliente. O `ThrottlerGuard` usa `req.ip` como chave de rastreamento — todos os usuários eram agrupados sob o mesmo IP, tornando o rate limit global em vez de por-cliente.
+- **Impacto:** Rate limiting completamente ineficaz em produção. Um único cliente mal-intencionado poderia esgotar cotas de outros usuários (denial of service para usuários legítimos) ou simplesmente ignorar os limites de `/auth/login`, `/auth/refresh` e `/auth/resolve-email`.
+- **Identificado em:** revisão pós-deploy (US-11.1 concluída)

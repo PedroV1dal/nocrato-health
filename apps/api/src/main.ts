@@ -11,6 +11,10 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log'],
   })
 
+  // Confia no primeiro proxy (Nginx) para ler o IP real do cliente via X-Real-IP / X-Forwarded-For
+  // Sem isso, req.ip retorna o IP interno do Docker (Nginx) e o rate limit quebra em produção
+  app.getHttpAdapter().getInstance().set('trust proxy', 1)
+
   app.use(helmet())
   app.enableCors({
     origin: env.NODE_ENV === 'production' ? env.FRONTEND_URL : ['http://localhost:5173', env.FRONTEND_URL],
