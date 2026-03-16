@@ -8,7 +8,7 @@
 | **Dependencies** | EPIC 10 (Portal do Paciente) |
 | **User Stories** | 4 |
 
-> **Casos de teste:** [docs/test-cases/epic-11.md](../test-cases/epic-11.md)
+> **Casos de teste:** [docs/roadmap/v1/test-cases/epic-11.md](test-cases/epic-11.md)
 
 ---
 

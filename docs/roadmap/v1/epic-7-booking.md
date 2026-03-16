@@ -8,7 +8,7 @@
 | **Dependencies** | EPIC 5 (Gestao de Consultas) |
 | **User Stories** | 5 |
 
-> **Casos de teste:** [docs/test-cases/epic-7.md](../test-cases/epic-7.md)
+> **Casos de teste:** [docs/roadmap/v1/test-cases/epic-7.md](test-cases/epic-7.md)
 
 ---
 

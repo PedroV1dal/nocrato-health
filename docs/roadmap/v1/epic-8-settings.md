@@ -8,7 +8,7 @@
 | **Dependencies** | EPIC 3 (Onboarding do Doutor) |
 | **User Stories** | 3 |
 
-> **Casos de teste:** [docs/test-cases/epic-8.md](../test-cases/epic-8.md)
+> **Casos de teste:** [docs/roadmap/v1/test-cases/epic-8.md](test-cases/epic-8.md)
 
 ---
 

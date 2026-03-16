@@ -54,13 +54,13 @@ A ordem correta é:
 ### Antes de qualquer sessão de implementação
 
 1. **Acione um Explore agent** para pré-carregar o contexto da US sem poluir o contexto principal. O agente deve ler e resumir:
-   - Epic da US em `docs/roadmap/epic-N-*.md` (critérios de aceitação da US específica)
+   - Epic da US em `docs/roadmap/vN/epic-N-*.md` (critérios de aceitação da US específica)
    - Flow relevante em `docs/flows/` (se existir)
    - Tabelas envolvidas em `docs/database/schema.sql`
    - Módulos existentes na pasta correspondente em `apps/api/src/modules/`
    - Retornar resumo compacto (~80 linhas) com: critérios de aceitação, colunas relevantes, código reutilizável, dependências e conflitos
 2. Verifique as dependências (quais epics devem estar completos antes)
-3. **Se for a primeira US de um epic novo:** acione `/test-cases` para gerar os CTs de todas as US do epic antes de começar a implementar. Os CTs ficam em `docs/test-cases/epic-N.md`.
+3. **Se for a primeira US de um epic novo:** acione `/test-cases` para gerar os CTs de todas as US do epic antes de começar a implementar. Os CTs ficam em `docs/roadmap/vN/test-cases/epic-N.md`.
 4. Consulte o agente especializado em `.claude/agents/` para o domínio em questão
 5. Consulte `.claude/prompt-engineering.md` para técnicas de PE antes de acionar subagentes de implementação
 
@@ -196,6 +196,10 @@ Consulte `.claude/agents/qa.md` — seção "Playwright via MCP". Resumo: roda l
 
 ### `docs/roadmap/`
 
+Organizado por entrega (versão). Cada pasta `vN/` agrupa os epics e test cases de uma entrega completa.
+
+#### `docs/roadmap/v1/` — Entrega inicial (MVP)
+
 | Arquivo                     | Conteúdo                                                         |
 | --------------------------- | ---------------------------------------------------------------- |
 | `epics-overview.md`         | Visão geral dos 12 epics, grafo de dependências, checklist final |
@@ -211,15 +215,10 @@ Consulte `.claude/agents/qa.md` — seção "Playwright via MCP". Resumo: roda l
 | `epic-9-events.md`          | Módulo NestJS do agente WhatsApp                                 |
 | `epic-10-patient-portal.md` | Portal do paciente                                               |
 | `epic-11-deploy.md`         | Polish, Swagger, seed, deploy Hostinger                          |
+| `test-cases/epic-N.md`      | Casos de teste manuais (BDD) por epic — gerados pelo `/test-cases` |
 
-### `docs/test-cases/`
-
-| Arquivo        | Conteúdo                                                                   |
-| -------------- | -------------------------------------------------------------------------- |
-| `epic-N.md`    | Casos de teste manuais (BDD) por epic — linkado no topo do epic doc        |
-
-Os epic docs referenciam o arquivo via `> **Casos de teste:** [docs/test-cases/epic-N.md](...)`.
-Gerados pela skill `/test-cases` antes da etapa de QA de cada US.
+Os epic docs referenciam os test cases via `> **Casos de teste:** [docs/roadmap/v1/test-cases/epic-N.md](...)`.
+Novas entregas criam `docs/roadmap/v2/`, `docs/roadmap/v3/`, etc.
 
 ### `docs/security/`
 

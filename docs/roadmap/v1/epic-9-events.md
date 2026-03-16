@@ -8,7 +8,7 @@
 | **Dependencies** | EPIC 7 (Agendamento Publico), EPIC 8 (Configuracoes & Agente) |
 | **User Stories** | 4 |
 
-> **Casos de teste:** [docs/test-cases/epic-9.md](../test-cases/epic-9.md)
+> **Casos de teste:** [docs/roadmap/v1/test-cases/epic-9.md](test-cases/epic-9.md)
 
 ---
 

@@ -8,7 +8,7 @@
 | **Dependencies** | EPIC 9 (Agente WhatsApp - Modulo Interno), EPIC 5 (Gestão de Consultas) |
 | **User Stories** | 3 |
 
-> **Casos de teste:** [docs/test-cases/epic-10.md](../test-cases/epic-10.md)
+> **Casos de teste:** [docs/roadmap/v1/test-cases/epic-10.md](test-cases/epic-10.md)
 
 ---
 

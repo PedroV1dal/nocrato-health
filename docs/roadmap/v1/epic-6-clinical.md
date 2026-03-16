@@ -8,7 +8,7 @@
 | **Dependencies** | EPIC 4 (Gestao de Pacientes) |
 | **User Stories** | 5 |
 
-> **Casos de teste:** [docs/test-cases/epic-6.md](../test-cases/epic-6.md)
+> **Casos de teste:** [docs/roadmap/v1/test-cases/epic-6.md](test-cases/epic-6.md)
 
 ---
 
