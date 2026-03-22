@@ -9,38 +9,62 @@
   "colorGroups": [
     {
       "query": "path:roadmap/",
-      "color": { "a": 1, "rgb": 16753920 }
+      "color": {
+        "a": 1,
+        "rgb": 16753920
+      }
     },
     {
       "query": "path:flows/",
-      "color": { "a": 1, "rgb": 3394611 }
+      "color": {
+        "a": 1,
+        "rgb": 3394611
+      }
     },
     {
       "query": "path:architecture/",
-      "color": { "a": 1, "rgb": 4613119 }
+      "color": {
+        "a": 1,
+        "rgb": 4613119
+      }
     },
     {
       "query": "path:database/",
-      "color": { "a": 1, "rgb": 8388736 }
+      "color": {
+        "a": 1,
+        "rgb": 8388736
+      }
     },
     {
       "query": "path:test-cases/",
-      "color": { "a": 1, "rgb": 16777113 }
+      "color": {
+        "a": 1,
+        "rgb": 16777113
+      }
     },
     {
       "query": "path:security/",
-      "color": { "a": 1, "rgb": 16724736 }
+      "color": {
+        "a": 1,
+        "rgb": 16724736
+      }
     },
     {
       "query": "tag:onboarding",
-      "color": { "a": 1, "rgb": 16744272 }
+      "color": {
+        "a": 1,
+        "rgb": 16744272
+      }
     },
     {
       "query": "tag:ops",
-      "color": { "a": 1, "rgb": 8947848 }
+      "color": {
+        "a": 1,
+        "rgb": 8947848
+      }
     }
   ],
-  "collapse-display": false,
+  "collapse-display": true,
   "showArrow": true,
   "textFadeMultiplier": 0,
   "nodeSizeMultiplier": 1,
@@ -50,6 +74,6 @@
   "repelStrength": 10,
   "linkStrength": 1,
   "linkDistance": 250,
-  "scale": 1,
+  "scale": 0.517420460842509,
   "close": false
 }

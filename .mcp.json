@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "obsidian": {
+      "type": "stdio",
+      "command": "mcp-server-filesystem",
+      "args": ["/home/vidales/nocrato-health-v2/docs"]
+    }
+  }
+}
