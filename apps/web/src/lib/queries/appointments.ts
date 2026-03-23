@@ -29,7 +29,7 @@ export interface CreateAppointmentPayload {
 export type UpdateAppointmentStatusPayload =
   | { status: 'waiting' }
   | { status: 'in_progress' }
-  | { status: 'completed'; notes?: string }
+  | { status: 'completed'; notes: string }
   | { status: 'cancelled'; cancellationReason: string }
   | { status: 'no_show' }
   | { status: 'rescheduled'; newDateTime: string; newDurationMinutes?: number }
