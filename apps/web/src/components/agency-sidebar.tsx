@@ -7,13 +7,15 @@ interface NavLinkProps {
   readonly to: string
   readonly children: React.ReactNode
   readonly onClick?: () => void
+  readonly exact?: boolean
 }
 
-function NavLink({ to, children, onClick }: NavLinkProps) {
+function NavLink({ to, children, onClick, exact }: NavLinkProps) {
   return (
     <Link
       to={to}
       onClick={onClick}
+      activeOptions={exact ? { exact: true } : undefined}
       className={cn(
         'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white',
       )}
@@ -59,7 +61,7 @@ export function AgencySidebar({ onClose }: AgencySidebarProps) {
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-2">
-        <NavLink to="/agency" onClick={onClose}>Dashboard</NavLink>
+        <NavLink to="/agency" onClick={onClose} exact>Dashboard</NavLink>
         <NavLink to="/agency/doctors" onClick={onClose}>Doutores</NavLink>
         <NavLink to="/agency/members" onClick={onClose}>Colaboradores</NavLink>
       </nav>

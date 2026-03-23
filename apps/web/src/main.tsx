@@ -37,6 +37,18 @@ const indexRoute = createRoute({
   beforeLoad: () => { throw redirect({ to: '/agency/login' }) },
 })
 
+const doctorRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/doctor',
+  beforeLoad: () => { throw redirect({ to: '/doctor/login' }) },
+})
+
+const patientRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/patient',
+  beforeLoad: () => { throw redirect({ to: '/patient/access' }) },
+})
+
 const agencyLoginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/agency/login',
@@ -203,6 +215,8 @@ const patientPortalRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  doctorRedirectRoute,
+  patientRedirectRoute,
   agencyLoginRoute,
   agencyResetPasswordRoute,
   agencyLayoutRoute.addChildren([
