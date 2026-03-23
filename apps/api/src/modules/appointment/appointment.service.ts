@@ -360,7 +360,17 @@ export class AppointmentService {
           'created_at',
         ])
 
-      // 5. Lógica de ativação do portal do paciente na conclusão
+      // 5. Inserir clinical_note quando completar consulta
+      if (dto.status === 'completed') {
+        await trx('clinical_notes').insert({
+          tenant_id: tenantId,
+          patient_id: appointment.patient_id,
+          appointment_id: appointmentId,
+          content: dto.notes,
+        })
+      }
+
+      // 6. Lógica de ativação do portal do paciente na conclusão
       let portalActivated = false
       let portalAccessCode: string | null = null
       if (dto.status === 'completed') {
@@ -399,7 +409,7 @@ export class AppointmentService {
         }
       }
 
-      // 6. Registrar evento de audit trail
+      // 7. Registrar evento de audit trail
       const payload: Record<string, unknown> = {
         appointment_id: appointmentId,
         patient_id: appointment.patient_id,

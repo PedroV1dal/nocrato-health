@@ -30,6 +30,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter'
 import { AppointmentService } from './appointment.service'
 import { EventLogService } from '@/modules/event-log/event-log.service'
 import { KNEX } from '@/database/knex.provider'
+import { UpdateAppointmentStatusSchema } from './dto/update-appointment-status.dto'
 
 // ---------------------------------------------------------------------------
 // Shared mocks for EventEmitter2 and EventLogService
@@ -855,6 +856,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
   /**
    * Mock trx para transições normais (não-rescheduled).
    * appointments: 1ª chamada = SELECT, 2ª = UPDATE
+   * clinical_notes: INSERT (somente para completed com notes)
    * patients: 1ª chamada = SELECT, 2ª = UPDATE (somente para completed)
    */
   const createMockTrxNormal = (opts: {
@@ -878,6 +880,9 @@ describe('AppointmentService — updateAppointmentStatus', () => {
       update: jest.fn().mockReturnThis(),
       returning: jest.fn().mockResolvedValue([updated]),
     }
+    const clinicalNoteInsertBuilder = {
+      insert: jest.fn().mockResolvedValue([1]),
+    }
     const patientSelectBuilder = {
       where: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
@@ -896,6 +901,9 @@ describe('AppointmentService — updateAppointmentStatus', () => {
         apptCalls++
         return apptCalls === 1 ? apptSelectBuilder : apptUpdateBuilder
       }
+      if (table === 'clinical_notes') {
+        return clinicalNoteInsertBuilder
+      }
       if (table === 'patients') {
         patientCalls++
         return patientCalls === 1 ? patientSelectBuilder : patientUpdateBuilder
@@ -903,7 +911,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
       throw new Error(`Tabela inesperada no mock: ${table}`)
     })
 
-    return { trx, apptSelectBuilder, apptUpdateBuilder, patientSelectBuilder, patientUpdateBuilder }
+    return { trx, apptSelectBuilder, apptUpdateBuilder, clinicalNoteInsertBuilder, patientSelectBuilder, patientUpdateBuilder }
   }
 
   /**
@@ -1090,7 +1098,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
-    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed', notes: 'Nota de encerramento da consulta.' }, ACTOR_ID)
 
     expect(patientUpdateBuilder.update).not.toHaveBeenCalled()
     expect(mockEventLogService.append).not.toHaveBeenCalledWith(
@@ -1117,7 +1125,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
-    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed', notes: 'Nota de encerramento da consulta.' }, ACTOR_ID)
 
     expect(patientUpdateBuilder.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1138,7 +1146,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
-    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed', notes: 'Nota de encerramento da consulta.' }, ACTOR_ID)
 
     expect(mockEventLogService.append).toHaveBeenCalledWith(
       TENANT_ID,
@@ -1172,7 +1180,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
-    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed', notes: 'Nota de encerramento da consulta.' }, ACTOR_ID)
 
     // patients.update deve receber o código gerado e portal_active: true
     expect(patientUpdateBuilder.update).toHaveBeenCalledWith(
@@ -1222,7 +1230,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
-    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed', notes: 'Nota de encerramento da consulta.' }, ACTOR_ID)
 
     // patients.update NÃO deve ser chamado para portal_access_code
     expect(patientUpdateBuilder.update).not.toHaveBeenCalled()
@@ -1258,7 +1266,7 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
 
-    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed' }, ACTOR_ID)
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, { status: 'completed', notes: 'Nota de encerramento da consulta.' }, ACTOR_ID)
 
     const [[updateArg]] = patientUpdateBuilder.update.mock.calls as [[Record<string, unknown>]]
     const code = updateArg.portal_access_code as string
@@ -1269,6 +1277,78 @@ describe('AppointmentService — updateAppointmentStatus', () => {
     // Garante que I e O não aparecem nas letras
     const lettersOnly = code.replace(/-/g, '').replace(/\d/g, '')
     expect(lettersOnly).not.toMatch(/[IO]/)
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-A: insert clinical_note when completing appointment with notes
+  // -------------------------------------------------------------------------
+
+  it('CT-A: should insert clinical_note when completing appointment with notes', async () => {
+    const existing = makeAppt('in_progress')
+    const updated = makeAppt('completed', { status: 'completed', completed_at: new Date() })
+    const { trx, clinicalNoteInsertBuilder } = createMockTrxNormal({
+      existing,
+      updated,
+      patient: { portal_access_code: 'ABC-1234-XYZ' },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await service.updateAppointmentStatus(TENANT_ID, APPOINTMENT_ID, {
+      status: 'completed',
+      notes: 'Paciente apresentou melhora.',
+    }, ACTOR_ID)
+
+    expect(clinicalNoteInsertBuilder.insert).toHaveBeenCalledWith({
+      tenant_id: TENANT_ID,
+      patient_id: existing.patient_id,
+      appointment_id: APPOINTMENT_ID,
+      content: 'Paciente apresentou melhora.',
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-B: Zod validation rejects completed without notes
+  // -------------------------------------------------------------------------
+
+  it('CT-B: should not insert clinical_note when completing without notes (Zod validation)', () => {
+    const result = UpdateAppointmentStatusSchema.safeParse({ status: 'completed' })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      // Zod discriminatedUnion retorna "Required" quando um campo obrigatório está ausente
+      const notesError = result.error.issues.find(issue => issue.path.includes('notes'))
+      expect(notesError).toBeDefined()
+    }
+  })
+
+  // -------------------------------------------------------------------------
+  // CT-C: correct tenant_id when inserting clinical_note
+  // -------------------------------------------------------------------------
+
+  it('CT-C: should use correct tenant_id when inserting clinical_note', async () => {
+    const customTenantId = 'custom-tenant-uuid'
+    const existing = makeAppt('in_progress')
+    const updated = makeAppt('completed', { status: 'completed', completed_at: new Date() })
+    const { trx, clinicalNoteInsertBuilder } = createMockTrxNormal({
+      existing,
+      updated,
+      patient: { portal_access_code: null },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockKnex.transaction.mockImplementation((cb: (t: any) => unknown) => cb(trx))
+
+    await service.updateAppointmentStatus(customTenantId, APPOINTMENT_ID, {
+      status: 'completed',
+      notes: 'Consulta finalizada com sucesso.',
+    }, ACTOR_ID)
+
+    expect(clinicalNoteInsertBuilder.insert).toHaveBeenCalledWith({
+      tenant_id: customTenantId,
+      patient_id: existing.patient_id,
+      appointment_id: APPOINTMENT_ID,
+      content: 'Consulta finalizada com sucesso.',
+    })
   })
 
   // -------------------------------------------------------------------------
