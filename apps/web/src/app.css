@@ -1,22 +1,6 @@
 @import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap");
 
-@font-face {
-  font-family: "Xilosa";
-  src: url("/fonts/Xilosa-Regular.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Xilosa";
-  src: url("/fonts/Xilosa-Medium.woff2") format("woff2");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
 @theme {
   /* Nocrato brand colors */
   --color-amber-dark: #6e5305;
@@ -28,7 +12,7 @@
 
   /* Typography */
   --font-heading: "Montserrat", sans-serif;
-  --font-body: "Xilosa", "Montserrat", sans-serif;
+  --font-body: "Montserrat", sans-serif;
 }
 
 @layer base {
