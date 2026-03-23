@@ -9,7 +9,7 @@ import {
   useCreateAppointment,
   type AppointmentsQueryParams,
 } from '@/lib/queries/appointments'
-import { formatDateTime } from '@/lib/utils'
+import { formatDateTime, formatPhone, fromDatetimeLocal } from '@/lib/utils'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +53,7 @@ function NewAppointmentDialog({ open, onOpenChange }: NewAppointmentDialogProps)
   const createAppointment = useCreateAppointment()
 
   const [patientSearch, setPatientSearch] = React.useState('')
+  const [debouncedSearch, setDebouncedSearch] = React.useState('')
   const [selectedPatientId, setSelectedPatientId] = React.useState('')
   const [selectedPatientName, setSelectedPatientName] = React.useState('')
   const [dateTime, setDateTime] = React.useState('')
@@ -61,9 +62,14 @@ function NewAppointmentDialog({ open, onOpenChange }: NewAppointmentDialogProps)
   const [showPatientDropdown, setShowPatientDropdown] = React.useState(false)
   const [errors, setErrors] = React.useState<{ patient?: string; dateTime?: string }>({})
 
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(patientSearch), 300)
+    return () => clearTimeout(timer)
+  }, [patientSearch])
+
   const patientSearchQuery = useQuery({
-    ...patientsSearchQueryOptions(patientSearch),
-    enabled: patientSearch.length >= 2,
+    ...patientsSearchQueryOptions(debouncedSearch),
+    enabled: debouncedSearch.length >= 2,
   })
 
   const patients = patientSearchQuery.data?.data ?? []
@@ -99,7 +105,7 @@ function NewAppointmentDialog({ open, onOpenChange }: NewAppointmentDialogProps)
     createAppointment.mutate(
       {
         patientId: selectedPatientId,
-        dateTime: new Date(dateTime).toISOString(),
+        dateTime: fromDatetimeLocal(dateTime),
         durationMinutes: Number(durationMinutes),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       },
@@ -151,21 +157,31 @@ function NewAppointmentDialog({ open, onOpenChange }: NewAppointmentDialogProps)
                 error={!!errors.patient}
                 autoComplete="off"
               />
-              {showPatientDropdown && patientSearch.length >= 2 && patients.length > 0 && (
+              {showPatientDropdown && patientSearch.length >= 2 && (
                 <div className="absolute z-50 mt-1 w-full rounded-md border border-[#e8dfc8] bg-white shadow-lg">
-                  <div className="py-1 max-h-48 overflow-y-auto">
-                    {patients.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => handleSelectPatient(p.id, p.name)}
-                        className="flex w-full items-start px-3 py-2 text-sm hover:bg-amber-bright/10 text-left transition-colors"
-                      >
-                        <span className="font-medium text-amber-dark">{p.name}</span>
-                        <span className="ml-2 text-[#6c85a0]">{p.phone}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {patientSearchQuery.isFetching ? (
+                    <div className="py-3 px-3 text-sm text-amber-mid text-center">
+                      Buscando...
+                    </div>
+                  ) : patients.length > 0 ? (
+                    <div className="py-1 max-h-48 overflow-y-auto">
+                      {patients.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handleSelectPatient(p.id, p.name)}
+                          className="flex w-full items-start px-3 py-2 text-sm hover:bg-amber-bright/10 text-left transition-colors"
+                        >
+                          <span className="font-medium text-amber-dark">{p.name}</span>
+                          <span className="ml-2 text-[#6c85a0]">{formatPhone(p.phone)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : debouncedSearch.length >= 2 ? (
+                    <div className="py-3 px-3 text-sm text-amber-mid text-center">
+                      Nenhum paciente encontrado
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>

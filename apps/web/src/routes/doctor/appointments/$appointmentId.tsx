@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, ChevronRight, Calendar, User, FileText, Clock, Plus } from 'lucide-react'
 
 import { appointmentDetailQueryOptions, useUpdateAppointmentStatus } from '@/lib/queries/appointments'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import { formatDate, formatDateTime, toDatetimeLocal, fromDatetimeLocal } from '@/lib/utils'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -106,12 +106,19 @@ interface RescheduleDialogProps {
   onOpenChange: (open: boolean) => void
   onConfirm: (newDateTime: string, newDurationMinutes: number) => void
   isPending: boolean
+  currentDateTime?: string
 }
 
-function RescheduleDialog({ open, onOpenChange, onConfirm, isPending }: RescheduleDialogProps) {
+function RescheduleDialog({ open, onOpenChange, onConfirm, isPending, currentDateTime }: RescheduleDialogProps) {
   const [newDateTime, setNewDateTime] = React.useState('')
   const [durationMinutes, setDurationMinutes] = React.useState('30')
   const [error, setError] = React.useState('')
+
+  React.useEffect(() => {
+    if (open && currentDateTime) {
+      setNewDateTime(toDatetimeLocal(currentDateTime))
+    }
+  }, [open, currentDateTime])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -119,7 +126,7 @@ function RescheduleDialog({ open, onOpenChange, onConfirm, isPending }: Reschedu
       setError('Informe a nova data e hora.')
       return
     }
-    onConfirm(new Date(newDateTime).toISOString(), Number(durationMinutes))
+    onConfirm(fromDatetimeLocal(newDateTime), Number(durationMinutes))
   }
 
   function handleClose() {
@@ -236,9 +243,10 @@ function CompleteDialog({ open, onOpenChange, onConfirm, isPending }: CompleteDi
 interface ActionButtonsProps {
   status: AppointmentStatus
   appointmentId: string
+  currentDateTime: string
 }
 
-function ActionButtons({ status, appointmentId }: ActionButtonsProps) {
+function ActionButtons({ status, appointmentId, currentDateTime }: ActionButtonsProps) {
   const updateStatus = useUpdateAppointmentStatus(appointmentId)
 
   const [cancelOpen, setCancelOpen] = React.useState(false)
@@ -409,6 +417,7 @@ function ActionButtons({ status, appointmentId }: ActionButtonsProps) {
         onOpenChange={setRescheduleOpen}
         onConfirm={handleReschedule}
         isPending={isPending}
+        currentDateTime={currentDateTime}
       />
       <CompleteDialog
         open={completeOpen}
@@ -593,7 +602,7 @@ export function DoctorAppointmentDetailPage() {
 
       {/* Ações */}
       <div className="rounded-xl border border-[#e8dfc8] bg-white p-5 shadow-sm">
-        <ActionButtons status={appointment.status} appointmentId={appointment.id} />
+        <ActionButtons status={appointment.status} appointmentId={appointment.id} currentDateTime={appointment.date_time} />
       </div>
 
       {/* Notas clínicas */}
