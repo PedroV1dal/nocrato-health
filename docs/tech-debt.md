@@ -279,6 +279,17 @@ Quando uma consulta é finalizada com notas, `appointment.service.ts` insere dir
 
 ---
 
+### TD-27 — `toDatetimeLocal`/`fromDatetimeLocal` assume timezone do browser = timezone do médico
+**Módulo:** `web` (utils)
+**Identificado em:** fix/doctor-portal-ux (tech-lead review)
+**Prioridade:** P2
+
+As funções `toDatetimeLocal` e `fromDatetimeLocal` em `apps/web/src/lib/utils.ts` usam `new Date()` com métodos `getHours()`/`getDate()` que operam no fuso horário do browser. Funcionam corretamente apenas quando o browser do médico está no mesmo fuso cadastrado em `doctors.timezone`. Se o médico cadastrar `America/Manaus` mas acessar pelo browser em GMT-3 (Brasília), os horários das consultas serão exibidos e salvos com 1h de diferença.
+
+**Fix:** Receber `timezone: string` como parâmetro explícito e usar `Intl.DateTimeFormat` com `timeZone` para converter corretamente independente do fuso do browser. Atualizar call sites em `appointments/index.tsx` e `appointments/$appointmentId.tsx` para passar `doctor.timezone`.
+
+---
+
 ### TD-25 — SEC-08: resolveEmail expõe enumeração de usuários sem normalização de resposta
 **Módulo:** `auth`
 **Identificado em:** Hardening pós-Epic 10 (SEC-08)

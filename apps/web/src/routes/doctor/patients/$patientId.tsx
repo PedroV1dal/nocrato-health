@@ -8,7 +8,7 @@ import { ArrowLeft, ChevronRight, FileText, Calendar, Paperclip, User, Upload } 
 
 import { patientProfileQueryOptions, useUpdatePatient, type UpdatePatientPayload } from '@/lib/queries/patients'
 import type { PatientAppointment } from '@/types/api'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import { formatDate, formatDateTime, formatPhone } from '@/lib/utils'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -136,7 +136,8 @@ function InfoTab({ patientId, patient }: InfoTabProps) {
           <Label htmlFor="pt-phone">Telefone</Label>
           <Input
             id="pt-phone"
-            {...register('phone')}
+            value={watch('phone') ?? ''}
+            onChange={(e) => setValue('phone', formatPhone(e.target.value))}
             error={!!errors.phone}
           />
           {errors.phone && <p className="text-xs text-red-500">{errors.phone.message}</p>}
@@ -453,7 +454,7 @@ export function DoctorPatientProfilePage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-amber-dark font-heading">{patient.name}</h1>
-            <p className="text-sm text-amber-mid">{patient.phone}</p>
+            <p className="text-sm text-amber-mid">{formatPhone(patient.phone)}</p>
           </div>
         </div>
         <StatusBadge status={patient.status} />

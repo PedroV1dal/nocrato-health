@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { formatPhone } from '@/lib/utils'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,8 @@ function Step1Profile({ onNext, isLoading, serverError }: Step1Props) {
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
+    watch,
   } = useForm<ProfileFormData>({ resolver: zodResolver(profileSchema) })
 
   async function onSubmit(data: ProfileFormData) {
@@ -257,7 +260,8 @@ function Step1Profile({ onNext, isLoading, serverError }: Step1Props) {
           <Input
             id="phone"
             placeholder="(11) 99999-9999"
-            {...register('phone')}
+            value={watch('phone') ?? ''}
+            onChange={(e) => setValue('phone', formatPhone(e.target.value))}
           />
         </div>
       </div>
@@ -287,6 +291,11 @@ interface Step2Props {
 }
 
 function Step2Schedule({ onNext, onBack, isLoading, serverError }: Step2Props) {
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const defaultTimezone = TIMEZONE_OPTIONS.some(o => o.value === browserTimezone)
+    ? browserTimezone
+    : 'America/Sao_Paulo'
+
   const {
     register,
     handleSubmit,
@@ -294,7 +303,7 @@ function Step2Schedule({ onNext, onBack, isLoading, serverError }: Step2Props) {
   } = useForm<ScheduleFormData>({
     resolver: zodResolver(scheduleSchema),
     defaultValues: {
-      timezone: 'America/Sao_Paulo',
+      timezone: defaultTimezone,
       appointmentDuration: 30,
     },
   })

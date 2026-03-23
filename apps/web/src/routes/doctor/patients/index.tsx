@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { Users, Search, UserPlus } from 'lucide-react'
 
 import { patientsQueryOptions, useCreatePatient } from '@/lib/queries/patients'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatPhone } from '@/lib/utils'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,6 +50,8 @@ function NewPatientDialog({ open, onOpenChange }: NewPatientDialogProps) {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
+    setValue,
+    watch,
   } = useForm<CreatePatientForm>({
     resolver: zodResolver(createPatientSchema),
   })
@@ -102,7 +104,8 @@ function NewPatientDialog({ open, onOpenChange }: NewPatientDialogProps) {
             <Input
               id="np-phone"
               placeholder="(11) 99999-9999"
-              {...register('phone')}
+              value={watch('phone') ?? ''}
+              onChange={(e) => setValue('phone', formatPhone(e.target.value))}
               error={!!errors.phone}
             />
             {errors.phone && <p className="text-xs text-red-500">{errors.phone.message}</p>}
@@ -273,7 +276,7 @@ export function DoctorPatientsPage() {
                   <StatusBadge status={patient.status} />
                 </div>
 
-                <p className="text-sm text-amber-mid">{patient.phone}</p>
+                <p className="text-sm text-amber-mid">{formatPhone(patient.phone)}</p>
 
                 {patient.email && (
                   <p className="text-xs text-amber-mid/70 truncate">{patient.email}</p>
