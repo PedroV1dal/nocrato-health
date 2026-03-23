@@ -360,8 +360,8 @@ export class AppointmentService {
           'created_at',
         ])
 
-      // 5. Se o doutor preencheu notas ao finalizar, criar clinical_note
-      if (dto.status === 'completed' && 'notes' in dto && dto.notes) {
+      // 5. Inserir clinical_note quando completar consulta
+      if (dto.status === 'completed') {
         await trx('clinical_notes').insert({
           tenant_id: tenantId,
           patient_id: appointment.patient_id,
@@ -435,7 +435,7 @@ export class AppointmentService {
         payload,
       )
 
-      // 8. Emitir evento via EventEmitter2 para reatividade do agente
+      // 7. Emitir evento via EventEmitter2 para reatividade do agente
       this.eventEmitter.emit('appointment.status_changed', {
         tenantId,
         appointmentId,
