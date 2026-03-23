@@ -268,6 +268,17 @@ Se o usuário desativar todos os dias na `ScheduleSection` de settings e salvar,
 
 ---
 
+### TD-26 — Evento `note.created` não emitido ao criar nota via finalização de consulta
+**Módulo:** `appointment`
+**Identificado em:** fix/session-and-clinical-notes (OBS-TL-1)
+**Prioridade:** P2
+
+Quando uma consulta é finalizada com notas, `appointment.service.ts` insere diretamente em `clinical_notes` sem emitir evento `note.created` no `event_log`. O endpoint dedicado `POST /api/v1/doctor/clinical-notes` (em `clinical-note.service.ts`) registra o evento — esta criação indireta não. Resulta em inconsistência no audit trail: notas criadas via finalização não aparecem nos logs de `note.created`.
+
+**Fix:** No bloco de inserção de `clinical_notes` em `appointment.service.ts`, adicionar `event_log` entry com `event_type: 'note.created'`, `actor_type: 'doctor'`, `actor_id`, `payload: { noteId, appointmentId, patientId }`.
+
+---
+
 ### TD-25 — SEC-08: resolveEmail expõe enumeração de usuários sem normalização de resposta
 **Módulo:** `auth`
 **Identificado em:** Hardening pós-Epic 10 (SEC-08)
