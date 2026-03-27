@@ -27,6 +27,7 @@ O Claude DEVE invocar as skills abaixo (via Skill tool) automaticamente quando a
 | Resumo de Continuação | `/compact` | Contexto acima de 60-70% **ou** qualquer entrega concluída **ou** antes de iniciar trabalho novo e complexo |
 | Definition of Done | `/definition-of-done` | Ao final de **qualquer entrega de código** (US, bugfix, melhoria, refactor) — antes de propor o commit |
 | Health Check | `/health-check` | Após **qualquer entrega de código** — antes do commit |
+| Code Review | `/code-review` | **Ao criar ou atualizar qualquer PR** — revisão obrigatória do diff antes do merge, independente do tipo de entrega |
 | Casos de Teste | `/test-cases` | **Ao iniciar um epic novo**, antes da primeira US — gera CTs para todo o epic de uma vez |
 
 **Regra:** se a condição for atendida e a skill não tiver sido invocada, o Claude está em violação do protocolo.
@@ -145,22 +146,23 @@ Fluxo típico de uma US com backend + frontend:
 4. QA testa        → roda testes automatizados + Playwright quando há UI
 5. /definition-of-done → checklist antes de propor commit
 6. /health-check   → verificação pós-código antes do commit
-7. /code-review    → revisão do diff completo da branch antes do merge
-8. ✅ Commit + PR + docs → atualizar docs afetadas, deletar branch após merge
+7. Commit + PR     → commitar, push, abrir PR
+8. /code-review    → revisão do diff completo do PR (obrigatório em TODO PR, não só US)
+9. ✅ Merge + docs  → atualizar docs afetadas, deletar branch após merge
 ```
 
 **Nunca avançar para o próximo trabalho sem que o ciclo acima esteja completo.**
 
 **Escala de rigor por tipo de entrega:**
 
-| Tipo | Explore | Worktrees | Tech-lead | QA backend | QA Playwright | DoD + HC |
-|------|---------|-----------|-----------|------------|---------------|----------|
-| User Story | ✅ completo | ✅ | ✅ | ✅ | ✅ se UI | ✅ |
-| Bugfix backend | ✅ focado | ✅ | ✅ | ✅ | se afeta UI | ✅ |
-| Bugfix frontend | ✅ focado | ✅ | ✅ | — | ✅ | ✅ |
-| Melhoria UX | ✅ focado | ✅ | ✅ | — | ✅ | ✅ |
-| Config / Env | — | — | ✅ (revisão rápida) | — | — | ✅ |
-| Refactor | ✅ completo | ✅ | ✅ | ✅ | se afeta UI | ✅ |
+| Tipo | Explore | Worktrees | Tech-lead | QA backend | QA Playwright | DoD + HC | /code-review |
+|------|---------|-----------|-----------|------------|---------------|----------|--------------|
+| User Story | ✅ completo | ✅ | ✅ | ✅ | ✅ se UI | ✅ | ✅ |
+| Bugfix backend | ✅ focado | ✅ | ✅ | ✅ | se afeta UI | ✅ | ✅ |
+| Bugfix frontend | ✅ focado | ✅ | ✅ | — | ✅ | ✅ | ✅ |
+| Melhoria UX | ✅ focado | ✅ | ✅ | — | ✅ | ✅ | ✅ |
+| Config / Env | — | — | ✅ (revisão rápida) | — | — | ✅ | ✅ |
+| Refactor | ✅ completo | ✅ | ✅ | ✅ | se afeta UI | ✅ | ✅ |
 
 > **DoCDD mid-implementation**: se durante a codificação você descobrir que o escopo real diverge do documentado, **pare, atualize a documentação primeiro, depois continue**. Nunca deixe a implementação divergir silenciosamente da documentação — isso invalida o princípio Docs First para todas as sessões futuras.
 
