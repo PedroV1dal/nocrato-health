@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { ArrowLeft, ChevronRight, FileText, Calendar, Paperclip, User, Upload } from 'lucide-react'
+import { ArrowLeft, ChevronRight, FileText, Calendar, Paperclip, User, Upload, ClipboardList } from 'lucide-react'
 
 import { patientProfileQueryOptions, useUpdatePatient, type UpdatePatientPayload } from '@/lib/queries/patients'
 import type { PatientAppointment } from '@/types/api'
@@ -82,6 +82,12 @@ interface InfoTabProps {
 function InfoTab({ patientId, patient }: InfoTabProps) {
   const updatePatient = useUpdatePatient(patientId)
 
+  // Buscar dados completos para a sidebar
+  const { data } = useQuery(patientProfileQueryOptions(patientId))
+  const appointments = data?.appointments ?? []
+  const documents = data?.documents ?? []
+  const clinicalNotes = data?.clinicalNotes ?? []
+
   const {
     register,
     handleSubmit,
@@ -120,7 +126,10 @@ function InfoTab({ patientId, patient }: InfoTabProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Coluna esquerda — form (2/3 do espaço) */}
+      <div className="lg:col-span-2">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label htmlFor="pt-name">Nome completo</Label>
@@ -188,16 +197,67 @@ function InfoTab({ patientId, patient }: InfoTabProps) {
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          disabled={!isDirty}
-          loading={isSubmitting || updatePatient.isPending}
-        >
-          Salvar alterações
-        </Button>
+          <div className="flex justify-end">
+            <Button
+              type="submit"
+              disabled={!isDirty}
+              loading={isSubmitting || updatePatient.isPending}
+            >
+              Salvar alterações
+            </Button>
+          </div>
+        </form>
       </div>
-    </form>
+
+      {/* Coluna direita — resumo (1/3) */}
+      <div className="space-y-4">
+        {/* Últimas consultas */}
+        <div className="rounded-lg border border-[#e8dfc8] p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-amber-dark flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Últimas consultas
+          </h3>
+          {appointments.slice(0, 3).map((apt) => (
+            <div key={apt.id} className="flex items-center justify-between text-sm gap-2">
+              <span className="text-amber-dark text-xs">{formatDateTime(apt.date_time)}</span>
+              <StatusBadge status={apt.status} />
+            </div>
+          ))}
+          {appointments.length === 0 && (
+            <p className="text-sm text-amber-mid italic">Nenhuma consulta</p>
+          )}
+        </div>
+
+        {/* Últimos documentos */}
+        <div className="rounded-lg border border-[#e8dfc8] p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-amber-dark flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Documentos recentes
+          </h3>
+          {documents.slice(0, 3).map((doc) => (
+            <div key={doc.id} className="flex items-center justify-between text-sm gap-2">
+              <span className="text-amber-dark truncate text-xs">{doc.file_name || doc.type}</span>
+              <span className="text-amber-mid text-xs whitespace-nowrap">{formatDate(doc.created_at)}</span>
+            </div>
+          ))}
+          {documents.length === 0 && (
+            <p className="text-sm text-amber-mid italic">Nenhum documento</p>
+          )}
+        </div>
+
+        {/* Notas clínicas */}
+        <div className="rounded-lg border border-[#e8dfc8] p-4 space-y-2">
+          <h3 className="text-sm font-semibold text-amber-dark flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Notas clínicas
+          </h3>
+          <p className="text-2xl font-bold text-amber-dark">{clinicalNotes.length}</p>
+          <p className="text-xs text-amber-mid">
+            {clinicalNotes.length === 0 ? 'Nenhuma nota registrada' : 'nota(s) registrada(s)'}
+          </p>
+        </div>
+      </div>
+    </div>
   )
 }
 
